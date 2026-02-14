@@ -702,6 +702,184 @@ function layerCompliance(t, matKey, extra, A_eff, isImp){
   return t/(A_eff*E);
 }
 
+// ============================================================
+// Shigley 30° frustum member stiffness (layered, two-sided)
+// Model: two frusta, each spanning half the grip length (Lg/2)
+// Total compliance = comp_top + comp_bot  => km = 1 / compliance
+// ============================================================
+function calcMemberStiffnessShigley(state, geom){
+  const isImp = state.units === "imperial";
+  const alpha = (state.geom.frustumAngleDeg || 30) * Math.PI/180;
+  const tanA  = Math.tan(alpha);
+  const dh    = geom.dh;
+
+  // Build full stack of layers through the grip, in order top->bottom
+  // Include washer layers only if used (these affect stiffness + drawing)
+  const layers = [];
+  if(state.geom.useHeadWasher && geom.tHW > 0){
+    layers.push(makeLayer(state.geom.tHeadWasher, state.geom.matHeadWasher, null, isImp, "Head washer"));
+  }
+  state.geom.members.forEach((m,i)=>{
+    layers.push(makeLayer(m.t, m.matKey, m.extra, isImp, `Member ${i+1}`));
+  });
+  if(state.geom.useNutWasher && geom.tNW > 0){
+    layers.push(makeLayer(state.geom.tNutWasher, state.geom.matNutWasher, null, isImp, "Nut washer"));
+  }
+
+  const Lg = geom.Lg;
+  const half = 0.5*Lg;
+
+  // compliance top half: start at Db_top, go downward to mid-plane
+  const topRes = complianceHalf_FromTop(layers, half, geom.Db_top, dh, tanA);
+
+  // compliance bottom half: start at Db_bot, go upward to mid-plane
+  const botRes = complianceHalf_FromBottom(layers, half, geom.Db_bot, dh, tanA);
+
+  const comp = topRes.comp + botRes.comp;
+  const km = comp > 0 ? 1/comp : Infinity;
+
+  return {
+    km,
+    compliance: comp,
+    comp_top: topRes.comp,
+    comp_bot: botRes.comp,
+    Dmid_top: topRes.Dend,
+    Dmid_bot: botRes.Dend
+  };
+}
+
+function makeLayer(t, matKey, extra, isImp, name){
+  const mat = MATERIALS.find(x=>x.key===matKey) || {};
+  const layer = { name, t: Number(t||0), matKey, kind: "E", E: null, k: null };
+
+  if(layer.t <= 0) return layer;
+
+  // Spring layers (gasket / o-ring)
+  if(mat.needsK){
+    layer.kind = "k";
+    layer.k = (extra!==null && isFinite(extra) && extra>0) ? Number(extra) : null;
+    return layer;
+  }
+
+  // Modulus layers
+  layer.kind = "E";
+  if(mat.needsE){
+    layer.E = (extra!==null && isFinite(extra) && extra>0) ? Number(extra) : null;
+  } else {
+    layer.E = materialE(matKey, isImp);
+  }
+  return layer;
+}
+
+// Traverse top->bottom until reaching depth "half"
+function complianceHalf_FromTop(layers, half, Db, dh, tanA){
+  let depth = 0;
+  let comp = 0;
+
+  for(const L of layers){
+    if(depth >= half) break;
+    const t = L.t || 0;
+    if(t <= 0) continue;
+
+    const seg = Math.min(t, half - depth); // segment thickness within top half
+
+    if(L.kind === "k"){
+      // If k provided for full layer thickness, compliance scales linearly with length fraction
+      const kFull = L.k;
+      comp += (kFull && kFull>0) ? (seg/t)*(1/kFull) : 1e6*(seg/t);
+    } else {
+      const E = L.E;
+      if(E && E>0){
+        const x0 = depth;
+        const x1 = depth + seg;
+        const D0 = Db + 2*x0*tanA;
+        const D1 = Db + 2*x1*tanA;
+        comp += frustumCompliance(E, dh, D0, D1, tanA);
+      }
+    }
+
+    depth += seg;
+  }
+
+  // Diameter at the end of this half-depth (for debug)
+  const Dend = Db + 2*half*tanA;
+  return { comp, Dend };
+}
+
+// Traverse bottom->top until reaching depth "half"
+function complianceHalf_FromBottom(layers, half, Db, dh, tanA){
+  let depth = 0;
+  let comp = 0;
+
+  for(let idx=layers.length-1; idx>=0; idx--){
+    if(depth >= half) break;
+    const L = layers[idx];
+    const t = L.t || 0;
+    if(t <= 0) continue;
+
+    const seg = Math.min(t, half - depth);
+
+    if(L.kind === "k"){
+      const kFull = L.k;
+      comp += (kFull && kFull>0) ? (seg/t)*(1/kFull) : 1e6*(seg/t);
+    } else {
+      const E = L.E;
+      if(E && E>0){
+        const x0 = depth;
+        const x1 = depth + seg;
+        const D0 = Db + 2*x0*tanA;
+        const D1 = Db + 2*x1*tanA;
+        comp += frustumCompliance(E, dh, D0, D1, tanA);
+      }
+    }
+
+    depth += seg;
+  }
+
+  const Dend = Db + 2*half*tanA;
+  return { comp, Dend };
+}
+
+/**
+ * Frustum compliance for a conical pressure field through thickness segment.
+ *
+ * Assumptions:
+ * - Axial strain: dδ = F dx / (E A(x))
+ * - A(x) = (π/4) (D(x)^2 - dh^2)
+ * - D(x) varies linearly from D0 to D1 due to cone angle α:
+ *     D(x) = Db + 2 x tan(α)  => for a segment we just pass endpoints D0, D1
+ *
+ * Result:
+ * δ/F = 1 / (E π dh tanα) * ln( [(D1 - dh)/(D1 + dh)] / [(D0 - dh)/(D0 + dh)] )
+ *
+ * Special case dh→0: use limit integral:
+ * δ/F = (2 / (E π tanα)) * (1/D0 - 1/D1)
+ */
+function frustumCompliance(E, dh, D0, D1, tanA){
+  // guard
+  if(!(E>0) || !(tanA>0) || !(D0>0) || !(D1>0)) return 0;
+
+  // Ensure D1 >= D0 for formula stability; if reversed, swap
+  let a0 = D0, a1 = D1;
+  if(a1 < a0){ const tmp=a0; a0=a1; a1=tmp; }
+
+  const eps = 1e-12;
+  if(dh <= eps){
+    // dh -> 0 limit
+    return (2/(E*Math.PI*tanA)) * ( (1/a0) - (1/a1) );
+  }
+
+  // Prevent singularity when D approaches dh
+  const safe = (D)=> Math.max(D, dh + 1e-9);
+
+  const D0s = safe(a0);
+  const D1s = safe(a1);
+
+  const term = Math.log( ((D1s - dh)/(D1s + dh)) / ((D0s - dh)/(D0s + dh)) );
+  return (1/(E*Math.PI*dh*tanA)) * term;
+}
+
+
 // Torque->preload mapping placeholder
 // Replace later with thread+bearing torque physics.
 // For now, use K-factor approximation derived from μ ranges:
@@ -756,7 +934,7 @@ function runSolveStub(){
   }
 
   const kbOut = calcBoltStiffness(state, geom);
-  const kmOut = calcMemberStiffnessPlaceholder(state, geom);
+  const kmOut = calcMemberStiffnessShigley(state, geom);
   const C = (kbOut.kb + kmOut.km) > 0 ? kbOut.kb/(kbOut.kb + kmOut.km) : null;
 
   const preload = calcPreloadBoundsPlaceholder(state);
@@ -1412,4 +1590,5 @@ function bindEvents(){
 </script>
 </body>
 </html>
+
 
