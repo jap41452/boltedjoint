@@ -234,14 +234,7 @@
 </div>
 
       <div class="row3">
-        <div>
-          <label>μ_thread (min)</label>
-          <input id="muTmin" type="number" step="any" value="0.12" />
-        </div>
-        <div>
-          <label>μ_thread (max)</label>
-          <input id="muTmax" type="number" step="any" value="0.20" />
-        </div>
+    
         <div>
           <label>μ_bearing (min)</label>
           <input id="muBmin" type="number" step="any" value="0.12" />
@@ -1326,7 +1319,7 @@ function recalcAndDraw(runSolve){
 //  $("debugOut").textContent = JSON.stringify({state, derived:{geom}}, null, 2);
 
   // If requested, run stub solve
-  if(runSolve) runSolveStub();
+  if(runSolve) runSolveForCurrentSelection();
 }
 
 function resetDefaults(){
@@ -1540,9 +1533,10 @@ function runSizeScan(){
     }
   }
 
-  if(bestIdx === null){
-    setStatus("No passing size (scan)", "err");
-
+if(bestIdx === null){
+  setStatus("No passing size (scan)", "err");
+  return;
+}
     // Optional: show worst offender for the largest bolt (for diagnostics)
     // Evaluate last size:
     const state = structuredClone(base);
@@ -1550,7 +1544,7 @@ function runSizeScan(){
     state.bolt.data = list[list.length-1];
     state.loads.holeDiaOverride = holeOverride;
     const ev = evaluateCurrentBolt(state);
-  //  $("debugOut").textContent = JSON.stringify({
+    $("debugOut").textContent = JSON.stringify({
       message:"No passing size found in current table range.",
       lastTried:list[list.length-1]?.label,
       lastEval:ev
@@ -1571,6 +1565,7 @@ function runSizeScan(){
 </script>
 </body>
 </html>
+
 
 
 
