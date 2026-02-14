@@ -1,0 +1,1313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Bolted Joint Module — Skeleton (UI + Scaled Drawing)</title>
+<style>
+  :root{
+    --bg:#ffffff;
+    --panel:#f5f6f8;
+    --card:#ffffff;
+    --line:#d7dbe3;
+    --text:#111827;
+    --muted:#5b6472;
+    --accent:#2563eb;
+    --ok:#166534;
+    --warn:#b45309;
+    --err:#b91c1c;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  }
+  html,body{height:100%; margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; background:var(--bg); color:var(--text);}
+  #app{height:100%; display:grid; grid-template-columns: 420px 1fr; gap:0; }
+  #left{background:var(--panel); border-right:1px solid var(--line); padding:14px 14px 16px; overflow:auto;}
+  #right{background:#fff; padding:14px; overflow:auto;}
+  h1{font-size:16px; margin:0 0 10px;}
+  .sub{color:var(--muted); font-size:12px; margin:0 0 12px;}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px; margin:10px 0;}
+  .card h2{font-size:13px; margin:0 0 10px; color:#0b1220;}
+  .row{display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin:8px 0;}
+  .row3{display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin:8px 0;}
+  label{font-size:12px; color:var(--muted); display:block; margin:0 0 4px;}
+  input, select{
+    width:100%; box-sizing:border-box;
+    border:1px solid var(--line); border-radius:10px;
+    padding:8px 10px; font-size:13px; background:#fff; color:var(--text);
+  }
+  input[type="checkbox"]{width:auto;}
+  .inline{display:flex; align-items:center; gap:8px;}
+  .btnbar{display:flex; gap:10px; flex-wrap:wrap;}
+  button{
+    border:1px solid var(--line); background:#fff; color:var(--text);
+    border-radius:10px; padding:9px 12px; font-size:13px; cursor:pointer;
+  }
+  button.primary{background:var(--accent); border-color:var(--accent); color:#fff;}
+  button:active{transform:translateY(1px);}
+  .small{font-size:12px; color:var(--muted);}
+  .table{
+    width:100%; border-collapse:collapse; font-size:12px;
+    border:1px solid var(--line); border-radius:10px; overflow:hidden;
+  }
+  .table th,.table td{border-bottom:1px solid var(--line); padding:7px 8px; text-align:left;}
+  .table th{background:#f9fafb; color:#111827; font-weight:600;}
+  .table tr:last-child td{border-bottom:none;}
+  .pill{display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; border:1px solid var(--line); color:var(--muted);}
+  .status-ok{color:var(--ok); border-color:#b7e0c3; background:#f2fbf5;}
+  .status-warn{color:var(--warn); border-color:#f1d6a8; background:#fffbf2;}
+  .status-err{color:var(--err); border-color:#f0b4b4; background:#fff5f5;}
+  #canvasWrap{
+    background:#fff; border:1px solid var(--line);
+    border-radius:12px; padding:10px;
+  }
+  canvas{width:100%; height:420px; display:block;}
+  pre{
+    font-family:var(--mono); font-size:12px; background:#0b1220; color:#e5e7eb;
+    border-radius:12px; padding:12px; overflow:auto; margin:10px 0 0;
+  }
+  .muted{color:var(--muted);}
+  .hr{height:1px; background:var(--line); margin:10px 0;}
+  .rightGrid{display:grid; grid-template-columns: 1fr; gap:12px;}
+  .note{font-size:12px; color:var(--muted); line-height:1.35;}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- LEFT PANEL -->
+  <div id="left">
+    <h1>Bolted Joint — Preload Sizing (Skeleton)</h1>
+    <p class="sub">Single-file UI + scaled joint drawing + data model + stubbed calculation pipeline.</p>
+
+    <div class="card">
+      <h2>Units & Standard</h2>
+      <div class="row">
+        <div>
+          <div class="inline">
+            <input id="isImperial" type="checkbox" checked />
+            <label for="isImperial" style="margin:0;">Imperial (in, lbf)</label>
+          </div>
+          <div class="small">Unchecked = Metric (mm, N)</div>
+        </div>
+        <div>
+          <label>Standard Family</label>
+          <select id="boltFamily"></select>
+        </div>
+      </div>
+
+      <div class="row3">
+        <div>
+          <label>Thread Series</label>
+          <select id="threadSeries">
+            <option value="coarse">Coarse</option>
+            <option value="fine">Fine</option>
+          </select>
+        </div>
+        <div>
+          <label>Grade / Class</label>
+          <select id="boltGrade"></select>
+        </div>
+        <div>
+          <label>Bolt Size</label>
+          <select id="boltSize"></select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>Bolt Material E (auto from family; override)</label>
+          <input id="boltE" type="number" step="any" />
+        </div>
+        <div>
+          <label>Frustum Half-Angle (deg)</label>
+          <input id="frustumAngle" type="number" step="any" value="30" />
+        </div>
+      </div>
+
+      <div class="note">
+        Washer bearing diameter rule: <b>if washer used → OD</b>. If no washer → bolt head / nut bearing diameter (from table placeholders).
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Geometry Stack</h2>
+
+      <div class="row3">
+        <div>
+          <label>Head Washer Used?</label>
+          <select id="useHeadWasher">
+            <option value="yes" selected>Yes</option>
+            <option value="no">No</option>
+          </select>
+        </div>
+        <div>
+          <label>Head Washer Thickness</label>
+          <input id="tHeadWasher" type="number" step="any" value="0.06" />
+        </div>
+        <div>
+          <label>Head Washer OD</label>
+          <input id="odHeadWasher" type="number" step="any" value="1.00" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>Head Washer Material</label>
+          <select id="matHeadWasher"></select>
+        </div>
+        <div>
+          <label>Clamped Members (1–5)</label>
+          <select id="numMembers">
+            <option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="membersArea"></div>
+
+      <div class="row3">
+        <div>
+          <label>Nut Washer Used?</label>
+          <select id="useNutWasher">
+            <option value="yes" selected>Yes</option>
+            <option value="no">No</option>
+          </select>
+        </div>
+        <div>
+          <label>Nut Washer Thickness</label>
+          <input id="tNutWasher" type="number" step="any" value="0.06" />
+        </div>
+        <div>
+          <label>Nut Washer OD</label>
+          <input id="odNutWasher" type="number" step="any" value="1.00" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>Nut Washer Material</label>
+          <select id="matNutWasher"></select>
+        </div>
+        <div>
+          <label>Bolt Shank Length (smooth, within grip)</label>
+          <input id="Lshank" type="number" step="any" value="0.75" />
+        </div>
+      </div>
+
+      <div class="small muted">
+        Threaded length in grip is derived: <span class="pill">L_thread = L_grip − L_shank_in_grip</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Loads & Tightening Scatter</h2>
+      <div class="row3">
+        <div>
+          <label>External Load P</label>
+          <input id="Pext" type="number" step="any" value="2000" />
+        </div>
+        <div>
+          <label>Target Torque T</label>
+          <input id="Ttarget" type="number" step="any" value="120" />
+        </div>
+        <div>
+          <label>Torque Tolerance (±%)</label>
+          <input id="Ttol" type="number" step="any" value="10" />
+        </div>
+      </div>
+
+      <div class="row3">
+        <div>
+          <label>μ_thread (min)</label>
+          <input id="muTmin" type="number" step="any" value="0.12" />
+        </div>
+        <div>
+          <label>μ_thread (max)</label>
+          <input id="muTmax" type="number" step="any" value="0.20" />
+        </div>
+        <div>
+          <label>μ_bearing (min)</label>
+          <input id="muBmin" type="number" step="any" value="0.12" />
+        </div>
+      </div>
+      <div class="row3">
+        <div>
+          <label>μ_bearing (max)</label>
+          <input id="muBmax" type="number" step="any" value="0.20" />
+        </div>
+        <div>
+          <label>Clearance Hole Dia (override)</label>
+          <input id="holeDia" type="number" step="any" placeholder="blank = default from bolt" />
+        </div>
+        <div>
+          <label>Proof Utilization Limit</label>
+          <input id="proofLimit" type="number" step="any" value="1.00" />
+        </div>
+      </div>
+
+      <div class="btnbar" style="margin-top:10px;">
+        <button class="primary" id="btnSolve">Solve / Size Bolt (stub)</button>
+        <button id="btnRedraw">Redraw Only</button>
+        <button id="btnReset">Reset Defaults</button>
+      </div>
+      <div class="small muted" style="margin-top:6px;">
+        Current solver is <b>stubbed</b> but computes geometry, stiffness placeholders, load fraction, and draws scaled joint immediately.
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div id="right">
+    <div class="rightGrid">
+      <div id="canvasWrap">
+        <div class="inline" style="justify-content:space-between; margin-bottom:8px;">
+          <div class="inline" style="gap:10px;">
+            <span class="pill" id="unitsPill">Imperial</span>
+            <span class="pill" id="familyPill">SAE J429</span>
+            <span class="pill" id="sizePill">1/2-13</span>
+          </div>
+          <span class="pill" id="statusPill">Ready</span>
+        </div>
+        <canvas id="jointCanvas" width="1200" height="520"></canvas>
+        <div class="note" style="margin-top:8px;">
+          Drawing is to scale based on your inputs (stack thicknesses & bearing diameters). Threads are shown extending into the members (Shigley-style schematic).
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Computed Summary (mostly stubbed)</h2>
+        <table class="table" id="summaryTable">
+          <thead><tr><th>Quantity</th><th>Value</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>Debug / Data Model Snapshot</h2>
+        <pre id="debugOut">{}</pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   Placeholder data tables (expand later)
+   - Dimensions: imperial in inches; metric in mm (convert for calc)
+   - Strengths: placeholder proof strengths (psi / MPa) for demo
+   ============================================================ */
+
+// Material library: returns E in (psi) for imperial, (MPa) for metric.
+// Gasket/O-ring are modeled as direct k (spring) in series (user input).
+const MATERIALS = [
+  { key:"steel",      name:"Steel",            E_imp: 30e6, E_met: 200000 },
+  { key:"stainless",  name:"Stainless Steel",  E_imp: 28e6, E_met: 193000 },
+  { key:"aluminum",   name:"Aluminum",         E_imp: 10e6, E_met:  69000 },
+  { key:"gasket",     name:"Gasket (input k)", E_imp: null, E_met: null, needsK:true },
+  { key:"oring",      name:"O-ring (input k)", E_imp: null, E_met: null, needsK:true },
+  { key:"general",    name:"General (input E)",E_imp: null, E_met: null, needsE:true }
+];
+
+// Bolt families based on units choice
+const BOLT_FAMILIES = {
+  imperial: [
+    { key:"sae_j429", name:"SAE J429" },
+    { key:"astm",     name:"ASTM (placeholder)" }
+  ],
+  metric: [
+    { key:"iso_metric", name:"ISO Metric" }
+  ]
+};
+
+// Grades / classes (placeholder proof strengths)
+const GRADES = {
+  sae_j429: [
+    { key:"G2", name:"Grade 2",  Sp_imp: 55e3 },   // psi
+    { key:"G5", name:"Grade 5",  Sp_imp: 85e3 },
+    { key:"G8", name:"Grade 8",  Sp_imp: 120e3 }
+  ],
+  astm: [
+    { key:"A325", name:"A325", Sp_imp: 92e3 },
+    { key:"A490", name:"A490", Sp_imp: 130e3 }
+  ],
+  iso_metric: [
+    { key:"8.8",  name:"8.8",  Sp_met: 600 },     // MPa
+    { key:"10.9", name:"10.9", Sp_met: 830 },
+    { key:"12.9", name:"12.9", Sp_met: 970 }
+  ]
+};
+
+// Bolt size tables (placeholders, minimal set)
+// Each entry must include: d, pitch, At, d2, headD, headH, nutD, nutH, defaultHole, and thread labels.
+const BOLTS = {
+  // Imperial: use nominal diameter in inches
+  sae_j429: {
+    coarse: [
+      // 1/4-20
+      { label:"1/4-20", d:0.250, tpi:20, pitch:1/20, At:0.0318, d2:0.217, headD:0.438, headH:0.163, nutD:0.438, nutH:0.219, hole:0.281 },
+      // 5/16-18
+      { label:"5/16-18", d:0.3125, tpi:18, pitch:1/18, At:0.0524, d2:0.269, headD:0.531, headH:0.203, nutD:0.500, nutH:0.266, hole:0.344 },
+      // 3/8-16
+      { label:"3/8-16", d:0.375, tpi:16, pitch:1/16, At:0.0775, d2:0.324, headD:0.656, headH:0.244, nutD:0.562, nutH:0.328, hole:0.406 },
+      // 1/2-13
+      { label:"1/2-13", d:0.500, tpi:13, pitch:1/13, At:0.1419, d2:0.450, headD:0.875, headH:0.326, nutD:0.750, nutH:0.437, hole:0.531 },
+      // 5/8-11
+      { label:"5/8-11", d:0.625, tpi:11, pitch:1/11, At:0.2260, d2:0.566, headD:1.062, headH:0.408, nutD:0.938, nutH:0.547, hole:0.656 }
+    ],
+    fine: [
+      { label:"1/4-28", d:0.250, tpi:28, pitch:1/28, At:0.0364, d2:0.227, headD:0.438, headH:0.163, nutD:0.438, nutH:0.219, hole:0.281 },
+      { label:"5/16-24", d:0.3125, tpi:24, pitch:1/24, At:0.0580, d2:0.283, headD:0.531, headH:0.203, nutD:0.500, nutH:0.266, hole:0.344 },
+      { label:"3/8-24", d:0.375, tpi:24, pitch:1/24, At:0.0878, d2:0.334, headD:0.656, headH:0.244, nutD:0.562, nutH:0.328, hole:0.406 },
+      { label:"1/2-20", d:0.500, tpi:20, pitch:1/20, At:0.1599, d2:0.459, headD:0.875, headH:0.326, nutD:0.750, nutH:0.437, hole:0.531 }
+    ]
+  },
+  astm: { // reuse same geometry table for now
+    coarse: [], fine: []
+  },
+
+  // Metric: use nominal diameter in mm, pitch in mm
+  iso_metric: {
+    coarse: [
+      { label:"M6×1.0",  d:6,  pitch:1.0, At:20.1, d2:5.35, headD:10, headH:4, nutD:10, nutH:5, hole:6.6 },
+      { label:"M8×1.25", d:8,  pitch:1.25, At:36.6, d2:7.19, headD:13, headH:5.3, nutD:13, nutH:6.5, hole:9.0 },
+      { label:"M10×1.5", d:10, pitch:1.5, At:58.0, d2:9.03, headD:16, headH:6.4, nutD:17, nutH:8, hole:11.0 },
+      { label:"M12×1.75",d:12, pitch:1.75, At:84.3, d2:10.86, headD:18, headH:7.5, nutD:19, nutH:10, hole:13.0 }
+    ],
+    fine: [
+      { label:"M8×1.0",  d:8,  pitch:1.0, At:39.2, d2:7.35, headD:13, headH:5.3, nutD:13, nutH:6.5, hole:9.0 },
+      { label:"M10×1.25",d:10, pitch:1.25, At:61.2, d2:9.20, headD:16, headH:6.4, nutD:17, nutH:8, hole:11.0 },
+      { label:"M12×1.5", d:12, pitch:1.5, At:92.1, d2:11.04, headD:18, headH:7.5, nutD:19, nutH:10, hole:13.0 }
+    ]
+  }
+};
+
+// Populate ASTM with SAE sizes as placeholder
+BOLTS.astm.coarse = JSON.parse(JSON.stringify(BOLTS.sae_j429.coarse));
+BOLTS.astm.fine   = JSON.parse(JSON.stringify(BOLTS.sae_j429.fine));
+
+/* ============================================================
+   Helpers
+   ============================================================ */
+const $ = id => document.getElementById(id);
+
+function fmt(x, digits=4){
+  if (x === null || x === undefined || Number.isNaN(x)) return "—";
+  const ax = Math.abs(x);
+  if (ax !== 0 && (ax >= 1e6 || ax < 1e-3)) return x.toExponential(3);
+  return Number(x).toFixed(digits).replace(/\.?0+$/,"");
+}
+
+function unitLabel(isImp){
+  return isImp ? {L:"in", F:"lbf", T:"lbf·in", E:"psi"} : {L:"mm", F:"N", T:"N·mm", E:"MPa"};
+}
+
+// Convert material modulus to current units
+function materialE(matKey, isImp){
+  const m = MATERIALS.find(x => x.key === matKey);
+  if(!m) return null;
+  return isImp ? m.E_imp : m.E_met;
+}
+
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+/* ============================================================
+   UI construction: member rows + materials
+   ============================================================ */
+function buildMaterialsSelect(sel){
+  sel.innerHTML = "";
+  MATERIALS.forEach(m=>{
+    const opt = document.createElement("option");
+    opt.value = m.key;
+    opt.textContent = m.name;
+    sel.appendChild(opt);
+  });
+}
+
+function buildMemberRows(){
+  const n = Number($("numMembers").value);
+  const wrap = $("membersArea");
+  wrap.innerHTML = "";
+
+  for(let i=1;i<=n;i++){
+    const card = document.createElement("div");
+    card.className = "card";
+    card.style.margin = "10px 0 0";
+    card.style.borderRadius = "12px";
+    card.innerHTML = `
+      <h2 style="margin-bottom:8px;">Clamped Member ${i}</h2>
+      <div class="row3">
+        <div>
+          <label>Thickness</label>
+          <input id="m_t_${i}" type="number" step="any" value="${i===1?0.25:0.25}">
+        </div>
+        <div>
+          <label>Material</label>
+          <select id="m_mat_${i}"></select>
+        </div>
+        <div>
+          <label>Special (k or E)</label>
+          <input id="m_extra_${i}" type="number" step="any" placeholder="auto" />
+        </div>
+      </div>
+      <div class="small muted" id="m_help_${i}">For Gasket/O-ring enter k; for General enter E. Otherwise leave blank.</div>
+    `;
+    wrap.appendChild(card);
+
+    const sel = $("m_mat_"+i);
+    buildMaterialsSelect(sel);
+    sel.value = (i===1 ? "steel" : "steel");
+
+    // React to material selection
+    sel.addEventListener("change", ()=>{
+      updateMemberHelp(i);
+      recalcAndDraw(false);
+    });
+    $("m_t_"+i).addEventListener("input", ()=>recalcAndDraw(false));
+    $("m_extra_"+i).addEventListener("input", ()=>recalcAndDraw(false));
+    updateMemberHelp(i);
+  }
+}
+
+function updateMemberHelp(i){
+  const key = $("m_mat_"+i).value;
+  const m = MATERIALS.find(x=>x.key===key);
+  const help = $("m_help_"+i);
+  if(m?.needsK) help.textContent = "This layer uses direct stiffness k (force/length). Enter k in 'Special'.";
+  else if(m?.needsE) help.textContent = "This layer uses modulus E. Enter E in 'Special'.";
+  else help.textContent = "Standard material. Leave 'Special' blank (uses library E).";
+}
+
+/* ============================================================
+   Units-driven bolt family/grade/size dropdown logic
+   ============================================================ */
+function rebuildBoltFamilyOptions(){
+  const isImp = $("isImperial").checked;
+  const famSel = $("boltFamily");
+  famSel.innerHTML = "";
+  const families = isImp ? BOLT_FAMILIES.imperial : BOLT_FAMILIES.metric;
+  families.forEach(f=>{
+    const opt = document.createElement("option");
+    opt.value = f.key;
+    opt.textContent = f.name;
+    famSel.appendChild(opt);
+  });
+  famSel.value = families[0].key;
+}
+
+function rebuildGradeOptions(){
+  const family = $("boltFamily").value;
+  const gradeSel = $("boltGrade");
+  gradeSel.innerHTML = "";
+  (GRADES[family] || []).forEach(g=>{
+    const opt = document.createElement("option");
+    opt.value = g.key;
+    opt.textContent = g.name;
+    gradeSel.appendChild(opt);
+  });
+  gradeSel.value = (GRADES[family] && GRADES[family][0]) ? GRADES[family][0].key : "";
+}
+
+function rebuildSizeOptions(){
+  const family = $("boltFamily").value;
+  const series = $("threadSeries").value;
+  const sizeSel = $("boltSize");
+  sizeSel.innerHTML = "";
+  const list = (BOLTS[family] && BOLTS[family][series]) ? BOLTS[family][series] : [];
+  list.forEach((b,idx)=>{
+    const opt = document.createElement("option");
+    opt.value = String(idx);
+    opt.textContent = b.label;
+    sizeSel.appendChild(opt);
+  });
+  sizeSel.value = list.length ? "0" : "";
+}
+
+function updateBoltEDefault(){
+  const isImp = $("isImperial").checked;
+  // default bolt E to steel-ish
+  $("boltE").value = isImp ? 30e6 : 200000;
+}
+
+/* ============================================================
+   Read inputs into a single state object
+   ============================================================ */
+function readState(){
+  const isImp = $("isImperial").checked;
+  const u = unitLabel(isImp);
+  const family = $("boltFamily").value;
+  const series = $("threadSeries").value;
+  const gradeKey = $("boltGrade").value;
+
+  const sizeIdx = Number($("boltSize").value || 0);
+  const bolt = (BOLTS[family] && BOLTS[family][series]) ? BOLTS[family][series][sizeIdx] : null;
+  const grade = (GRADES[family] || []).find(g=>g.key===gradeKey) || null;
+
+  const nMembers = Number($("numMembers").value);
+
+  const members = [];
+  for(let i=1;i<=nMembers;i++){
+    const t = Number($("m_t_"+i).value || 0);
+    const matKey = $("m_mat_"+i).value;
+    const extra = $("m_extra_"+i).value.trim()==="" ? null : Number($("m_extra_"+i).value);
+    members.push({ t, matKey, extra });
+  }
+
+  const state = {
+    units: isImp ? "imperial" : "metric",
+    u,
+    bolt: {
+      family, series, gradeKey,
+      sizeIdx,
+      data: bolt,
+      grade: grade,
+      E: Number($("boltE").value || (isImp ? 30e6 : 200000))
+    },
+    geom: {
+      frustumAngleDeg: Number($("frustumAngle").value || 30),
+      useHeadWasher: $("useHeadWasher").value === "yes",
+      tHeadWasher: Number($("tHeadWasher").value || 0),
+      odHeadWasher: Number($("odHeadWasher").value || 0),
+      matHeadWasher: $("matHeadWasher").value,
+
+      useNutWasher: $("useNutWasher").value === "yes",
+      tNutWasher: Number($("tNutWasher").value || 0),
+      odNutWasher: Number($("odNutWasher").value || 0),
+      matNutWasher: $("matNutWasher").value,
+
+      members,
+      Lshank: Number($("Lshank").value || 0)
+    },
+    loads: {
+      P: Number($("Pext").value || 0),
+      T: Number($("Ttarget").value || 0),
+      TtolPct: Number($("Ttol").value || 0) / 100,
+      muTmin: Number($("muTmin").value || 0),
+      muTmax: Number($("muTmax").value || 0),
+      muBmin: Number($("muBmin").value || 0),
+      muBmax: Number($("muBmax").value || 0),
+      holeDiaOverride: $("holeDia").value.trim()==="" ? null : Number($("holeDia").value),
+      proofLimit: Number($("proofLimit").value || 1.0)
+    }
+  };
+  return state;
+}
+
+/* ============================================================
+   Derived geometry & placeholders for stiffness/torque mapping
+   ============================================================ */
+function deriveGeometry(state){
+  const isImp = state.units === "imperial";
+  const b = state.bolt.data;
+  if(!b) return null;
+
+  // Grip thickness: washers (if used) + members
+  const tHW = state.geom.useHeadWasher ? state.geom.tHeadWasher : 0;
+  const tNW = state.geom.useNutWasher  ? state.geom.tNutWasher  : 0;
+  const tMembers = state.geom.members.reduce((s,m)=>s + (m.t||0), 0);
+  const Lg = tHW + tMembers + tNW; // grip length
+
+  // Bearing diameter top/bottom:
+  // - if washer used => washer OD
+  // - else => headD / nutD from bolt table
+  const Db_top = state.geom.useHeadWasher ? state.geom.odHeadWasher : b.headD;
+  const Db_bot = state.geom.useNutWasher  ? state.geom.odNutWasher  : b.nutD;
+
+  // Hole diameter default
+  const dh = (state.loads.holeDiaOverride !== null) ? state.loads.holeDiaOverride : b.hole;
+
+  // Shank and thread lengths within grip
+  const Lsh = clamp(state.geom.Lshank, 0, Lg);
+  const Lth = Math.max(0, Lg - Lsh);
+
+  return {
+    Lg, tHW, tNW, tMembers,
+    Db_top, Db_bot,
+    dh,
+    Lsh, Lth
+  };
+}
+
+// Placeholder bolt stiffness kb (series spring of shank + threaded part)
+function calcBoltStiffness(state, geom){
+  const b = state.bolt.data;
+  const E = state.bolt.E;
+  if(!b || !geom) return null;
+
+  // Areas
+  const d = b.d;
+  const A_shank = Math.PI * d*d / 4;
+  const At = b.At;
+
+  // Compliance = L/(A E)
+  const comp = (geom.Lsh)/(A_shank*E) + (geom.Lth)/(At*E);
+  const kb = comp > 0 ? 1/comp : Infinity;
+  return { kb, A_shank, At };
+}
+
+// Member stiffness placeholder (you will replace with Shigley frustum compliance sum)
+// For now, use a crude axial bar equivalent using bearing area and total thickness as demo.
+// Also supports direct k for gasket/o-ring layers in series.
+function calcMemberStiffnessPlaceholder(state, geom){
+  const isImp = state.units === "imperial";
+  const ang = (state.geom.frustumAngleDeg || 30) * Math.PI/180;
+
+  // Choose an "effective area" based on average bearing diameter between top/bottom
+  const Db_eff = 0.5*(geom.Db_top + geom.Db_bot);
+  const A_eff = Math.PI * (Db_eff*Db_eff - geom.dh*geom.dh) / 4;
+
+  // Series compliance
+  let comp = 0;
+
+  // Head washer as a layer if used
+  if(state.geom.useHeadWasher){
+    comp += layerCompliance(state.geom.tHeadWasher, state.geom.matHeadWasher, null, A_eff, isImp);
+  }
+  // Members
+  for(const m of state.geom.members){
+    comp += layerCompliance(m.t, m.matKey, m.extra, A_eff, isImp);
+  }
+  // Nut washer if used
+  if(state.geom.useNutWasher){
+    comp += layerCompliance(state.geom.tNutWasher, state.geom.matNutWasher, null, A_eff, isImp);
+  }
+
+  const km = comp > 0 ? 1/comp : Infinity;
+
+  // Provide some placeholders for frustum exit diameters just for drawing annotations later
+  const spreadPerThickness = 2*Math.tan(ang);
+  const approxDbAtMid = Db_eff + spreadPerThickness*(geom.Lg/2);
+
+  return { km, A_eff, Db_eff, approxDbAtMid };
+}
+
+function layerCompliance(t, matKey, extra, A_eff, isImp){
+  if(!t || t<=0) return 0;
+  const mat = MATERIALS.find(x=>x.key===matKey);
+  if(!mat) return 0;
+
+  // Direct k spring layers:
+  if(mat.needsK){
+    const k = (extra!==null && isFinite(extra) && extra>0) ? extra : null;
+    // if no k, treat as very soft but finite
+    return k ? (1/k) : 1e6;
+  }
+
+  // Modulus layers:
+  let E = null;
+  if(mat.needsE){
+    E = (extra!==null && isFinite(extra) && extra>0) ? extra : null;
+  } else {
+    E = materialE(matKey, isImp);
+  }
+  if(!E || !isFinite(E) || E<=0) return 0;
+  return t/(A_eff*E);
+}
+
+// Torque->preload mapping placeholder
+// Replace later with thread+bearing torque physics.
+// For now, use K-factor approximation derived from μ ranges:
+// K ≈ 0.2 baseline, scaled by (μt+μb)
+function torqueToPreloadPlaceholder(T, d_nom, muT, muB){
+  const K = 0.14 + 0.35 * (0.5*(muT+muB)); // crude
+  if(K<=0 || d_nom<=0) return null;
+  return T/(K*d_nom);
+}
+
+function calcPreloadBoundsPlaceholder(state){
+  const b = state.bolt.data;
+  if(!b) return null;
+  const T = state.loads.T;
+  const tol = state.loads.TtolPct;
+  const Tmin = T*(1-tol);
+  const Tmax = T*(1+tol);
+
+  // Worst-case mapping:
+  // Fmin => low torque + high friction
+  const Fmin = torqueToPreloadPlaceholder(Tmin, b.d, state.loads.muTmax, state.loads.muBmax);
+  // Fmax => high torque + low friction
+  const Fmax = torqueToPreloadPlaceholder(Tmax, b.d, state.loads.muTmin, state.loads.muBmin);
+
+  return { Tmin, Tmax, Fmin, Fmax };
+}
+
+// Proof load
+function calcProofLoad(state){
+  const b = state.bolt.data;
+  const g = state.bolt.grade;
+  if(!b || !g) return null;
+
+  if(state.units === "imperial"){
+    const Sp = g.Sp_imp || null; // psi
+    return Sp ? Sp*b.At : null;  // lbf
+  } else {
+    const Sp = g.Sp_met || null; // MPa = N/mm^2
+    return Sp ? Sp*b.At : null;  // N (since At in mm^2)
+  }
+}
+
+/* ============================================================
+   Solver (stub) + output tables
+   ============================================================ */
+function runSolveStub(){
+  const state = readState();
+  const geom = deriveGeometry(state);
+  if(!geom){
+    setStatus("No bolt selected", "err");
+    return;
+  }
+
+  const kbOut = calcBoltStiffness(state, geom);
+  const kmOut = calcMemberStiffnessPlaceholder(state, geom);
+  const C = (kbOut.kb + kmOut.km) > 0 ? kbOut.kb/(kbOut.kb + kmOut.km) : null;
+
+  const preload = calcPreloadBoundsPlaceholder(state);
+  const Fproof = calcProofLoad(state);
+
+  // Checks (still meaningful even with placeholder mapping)
+  const P = state.loads.P;
+  const sepReq = (C!==null) ? (1-C)*P : null;
+  const sepMargin = (preload?.Fmin!=null && sepReq!=null) ? (preload.Fmin - sepReq) : null;
+
+  const FbMax = (preload?.Fmax!=null && C!=null) ? (preload.Fmax + C*P) : null;
+  const proofMargin = (Fproof!=null && FbMax!=null) ? (state.loads.proofLimit*Fproof - FbMax) : null;
+
+  // Status pill
+  let status = "Stub OK";
+  let cls = "ok";
+  if(sepMargin!==null && sepMargin < 0){ status = "Separates (stub)"; cls="err"; }
+  else if(proofMargin!==null && proofMargin < 0){ status = "Over proof (stub)"; cls="err"; }
+  else if(sepMargin!==null && sepMargin < 0.05*Math.max(1,sepReq||1)){ status = "Low sep margin"; cls="warn"; }
+
+  setStatus(status, cls);
+
+  // Build summary table
+  const u = state.u;
+  const rows = [
+    ["Grip length Lg", `${fmt(geom.Lg)} ${u.L}`],
+    ["Shank in grip Lsh", `${fmt(geom.Lsh)} ${u.L}`],
+    ["Thread in grip Lth", `${fmt(geom.Lth)} ${u.L}`],
+    ["Top bearing dia", `${fmt(geom.Db_top)} ${u.L}`],
+    ["Bottom bearing dia", `${fmt(geom.Db_bot)} ${u.L}`],
+    ["Hole dia", `${fmt(geom.dh)} ${u.L}`],
+
+    ["Bolt stiffness kb (placeholder)", `${fmt(kbOut.kb)} ${u.F}/${u.L}`],
+    ["Member stiffness km (placeholder)", `${fmt(kmOut.km)} ${u.F}/${u.L}`],
+    ["Load fraction C = kb/(kb+km)", `${fmt(C,5)}`],
+
+    ["Torque Tmin", `${fmt(preload.Tmin)} ${u.T}`],
+    ["Torque Tmax", `${fmt(preload.Tmax)} ${u.T}`],
+    ["Preload Fi,min (placeholder)", `${fmt(preload.Fmin)} ${u.F}`],
+    ["Preload Fi,max (placeholder)", `${fmt(preload.Fmax)} ${u.F}`],
+
+    ["Separation requirement (1−C)P", `${fmt(sepReq)} ${u.F}`],
+    ["Separation margin Fi,min − (1−C)P", `${fmt(sepMargin)} ${u.F}`],
+
+    ["Proof load Fproof", `${fmt(Fproof)} ${u.F}`],
+    ["Max bolt load Fi,max + C·P", `${fmt(FbMax)} ${u.F}`],
+    ["Proof margin (limit·Fproof − FbMax)", `${fmt(proofMargin)} ${u.F}`]
+  ];
+  renderSummary(rows);
+
+  // Drawing
+  drawJoint(state, geom);
+
+  // Debug snapshot
+  const snapshot = {
+    state,
+    derived: { geom, kbOut, kmOut, C, preload, Fproof, sepReq, sepMargin, FbMax, proofMargin },
+    notes: [
+      "Member stiffness and torque->preload are placeholders.",
+      "Washer OD used as bearing diameter when washer is enabled; otherwise head/nut bearing diameter."
+    ]
+  };
+  $("debugOut").textContent = JSON.stringify(snapshot, null, 2);
+}
+
+function renderSummary(rows){
+  const tbody = $("summaryTable").querySelector("tbody");
+  tbody.innerHTML = "";
+  for(const [k,v] of rows){
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${k}</td><td>${v}</td>`;
+    tbody.appendChild(tr);
+  }
+}
+
+function setStatus(text, level){
+  const pill = $("statusPill");
+  pill.textContent = text;
+  pill.className = "pill";
+  if(level==="ok") pill.classList.add("status-ok");
+  if(level==="warn") pill.classList.add("status-warn");
+  if(level==="err") pill.classList.add("status-err");
+}
+
+function updateRightPills(){
+  const isImp = $("isImperial").checked;
+  const fam = $("boltFamily").value;
+  const familyName = (BOLT_FAMILIES[isImp?"imperial":"metric"].find(x=>x.key===fam)?.name) || fam;
+
+  const series = $("threadSeries").value;
+  const sizeIdx = Number($("boltSize").value || 0);
+  const bolt = (BOLTS[fam] && BOLTS[fam][series]) ? BOLTS[fam][series][sizeIdx] : null;
+
+  $("unitsPill").textContent = isImp ? "Imperial" : "Metric";
+  $("familyPill").textContent = familyName;
+  $("sizePill").textContent = bolt ? bolt.label : "—";
+}
+
+/* ============================================================
+   Drawing (scaled)
+   ============================================================ */
+function drawJoint(state, geom){
+  const c = $("jointCanvas");
+  const ctx = c.getContext("2d");
+  ctx.clearRect(0,0,c.width,c.height);
+
+  // Basic layout
+  const pad = 40;
+  const W = c.width, H = c.height;
+
+  // Coordinate system: y increases downward.
+  const centerX = W*0.5;
+  const topY = pad + 20;
+  const bottomY = H - pad - 20;
+
+  // Total stack height for drawing (include head/nut thickness visually)
+  const b = state.bolt.data;
+
+  // Visual head/nut thickness
+  const headH = b.headH;
+  const nutH = b.nutH;
+
+  const stackH = geom.Lg;
+  const totalH = headH + stackH + nutH;
+
+  // Scale so totalH fits in available height
+  const availH = (bottomY - topY);
+  const sY = totalH > 0 ? (availH / totalH) : 1;
+
+  // Scale X based on max diameter among head/nut/washer ODs
+  const maxD = Math.max(
+    b.headD, b.nutD,
+    geom.Db_top, geom.Db_bot,
+    b.d*1.2
+  );
+  const availX = (W - 2*pad);
+  const sX = maxD > 0 ? (0.42*availX / maxD) : 1; // keep margins
+
+  const s = Math.min(sX, sY);
+
+  // Utility convert (diameter to pixels)
+  const Dpx = D => D*s;
+  const Lpx = L => L*s;
+
+  // y positions
+  const yHeadTop = topY;
+  const yHeadBot = yHeadTop + Lpx(headH);
+  const yStackTop = yHeadBot;
+  const yStackBot = yStackTop + Lpx(stackH);
+  const yNutTop = yStackBot;
+  const yNutBot = yNutTop + Lpx(nutH);
+
+  // Background guide
+  ctx.save();
+  ctx.strokeStyle = "#e5e7eb";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([6,6]);
+  ctx.strokeRect(pad, topY, W-2*pad, yNutBot-topY);
+  ctx.restore();
+
+  // Draw bolt shank & threads zone
+  const shankD = b.d;
+  const coreD = b.d*0.85;
+
+  // Define threaded region within grip based on Lsh/Lth
+  const yThreadStart = yStackTop + Lpx(geom.Lsh);
+  const yThreadEnd   = yStackBot;
+
+  // Bolt body
+  ctx.save();
+  ctx.fillStyle = "#d1d5db"; // bolt fill
+  // Shank rectangle through full assembly
+  drawCenteredRect(ctx, centerX, yHeadTop, Dpx(shankD*0.9), yNutBot-yHeadTop);
+  ctx.restore();
+
+  // Thread hatch in grip threaded zone (visual)
+  ctx.save();
+  ctx.strokeStyle = "#6b7280";
+  ctx.lineWidth = 1;
+  const xL = centerX - Dpx(coreD)/2;
+  const xR = centerX + Dpx(coreD)/2;
+  for(let y=yThreadStart; y<yThreadEnd; y+=10){
+    ctx.beginPath();
+    ctx.moveTo(xL, y);
+    ctx.lineTo(xR, y+10);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // Draw head
+  ctx.save();
+  ctx.fillStyle = "#9ca3af";
+  drawHex(ctx, centerX, yHeadTop + Lpx(headH)/2, Dpx(b.headD), Lpx(headH));
+  ctx.restore();
+
+  // Draw nut
+  ctx.save();
+  ctx.fillStyle = "#9ca3af";
+  drawHex(ctx, centerX, yNutTop + Lpx(nutH)/2, Dpx(b.nutD), Lpx(nutH));
+  ctx.restore();
+
+  // Draw washers (if used)
+  if(state.geom.useHeadWasher){
+    drawWasher(ctx, centerX, yStackTop, geom.Db_top, geom.dh, s, true);
+  }
+  if(state.geom.useNutWasher){
+    drawWasher(ctx, centerX, yStackBot - Lpx(state.geom.tNutWasher), geom.Db_bot, geom.dh, s, false);
+  }
+
+  // Draw clamped members stack with shading
+  let y = yStackTop;
+  // top washer thickness region is part of stack, draw as a thin plate if washer used
+  if(state.geom.useHeadWasher){
+    const t = state.geom.tHeadWasher;
+    drawLayer(ctx, centerX, y, t, geom.Db_top, geom.dh, s, "Head washer");
+    y += Lpx(t);
+  }
+
+  for(let i=0;i<state.geom.members.length;i++){
+    const m = state.geom.members[i];
+    drawLayer(ctx, centerX, y, m.t, Math.max(geom.Db_top, geom.Db_bot), geom.dh, s, `Member ${i+1}`);
+    y += Lpx(m.t);
+  }
+
+  if(state.geom.useNutWasher){
+    const t = state.geom.tNutWasher;
+    drawLayer(ctx, centerX, y, t, geom.Db_bot, geom.dh, s, "Nut washer");
+    y += Lpx(t);
+  }
+
+  // Draw frustum spread lines (schematic)
+  ctx.save();
+  ctx.strokeStyle = "#ef4444";
+  ctx.lineWidth = 2;
+
+  const ang = (state.geom.frustumAngleDeg||30) * Math.PI/180;
+  const spreadPerL = 2*Math.tan(ang); // diameter increase per unit thickness
+
+  const D0_top = geom.Db_top;
+  const D0_bot = geom.Db_bot;
+
+  // Top frustum line down
+  const y0 = yStackTop;
+  const y1 = yStackBot;
+  const D1_top = D0_top + spreadPerL*geom.Lg;
+  // Left edge line
+  ctx.beginPath();
+  ctx.moveTo(centerX - Dpx(D0_top)/2, y0);
+  ctx.lineTo(centerX - Dpx(D1_top)/2, y1);
+  ctx.stroke();
+  // Right edge line
+  ctx.beginPath();
+  ctx.moveTo(centerX + Dpx(D0_top)/2, y0);
+  ctx.lineTo(centerX + Dpx(D1_top)/2, y1);
+  ctx.stroke();
+
+  // Bottom frustum line up
+  const D1_bot = D0_bot + spreadPerL*geom.Lg;
+  ctx.beginPath();
+  ctx.moveTo(centerX - Dpx(D0_bot)/2, y1);
+  ctx.lineTo(centerX - Dpx(D1_bot)/2, y0);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(centerX + Dpx(D0_bot)/2, y1);
+  ctx.lineTo(centerX + Dpx(D1_bot)/2, y0);
+  ctx.stroke();
+
+  ctx.restore();
+
+  // External load arrows P (top plate up, bottom plate down)
+  drawArrow(ctx, centerX - Dpx(maxD)*0.55, yStackTop + 10, centerX - Dpx(maxD)*0.55, yStackTop - 50, "#111827");
+  drawArrow(ctx, centerX + Dpx(maxD)*0.55, yStackTop + 10, centerX + Dpx(maxD)*0.55, yStackTop - 50, "#111827");
+  drawArrow(ctx, centerX - Dpx(maxD)*0.55, yStackBot - 10, centerX - Dpx(maxD)*0.55, yStackBot + 50, "#111827");
+  drawArrow(ctx, centerX + Dpx(maxD)*0.55, yStackBot - 10, centerX + Dpx(maxD)*0.55, yStackBot + 50, "#111827");
+
+  ctx.save();
+  ctx.fillStyle = "#111827";
+  ctx.font = "16px system-ui";
+  ctx.fillText("P", centerX - Dpx(maxD)*0.57 - 10, yStackTop - 58);
+  ctx.fillText("P", centerX + Dpx(maxD)*0.57 - 10, yStackTop - 58);
+  ctx.fillText("P", centerX - Dpx(maxD)*0.57 - 10, yStackBot + 68);
+  ctx.fillText("P", centerX + Dpx(maxD)*0.57 - 10, yStackBot + 68);
+  ctx.restore();
+
+  // Labels
+  ctx.save();
+  ctx.fillStyle = "#111827";
+  ctx.font = "14px system-ui";
+  ctx.fillText(`Grip Lg = ${fmt(geom.Lg)} ${state.u.L}`, pad, topY - 10);
+  ctx.fillText(`Db(top)=${fmt(geom.Db_top)}  Db(bot)=${fmt(geom.Db_bot)}  dh=${fmt(geom.dh)}  (units: ${state.u.L})`, pad, yNutBot + 22);
+  ctx.restore();
+}
+
+function drawCenteredRect(ctx, cx, yTop, w, h){
+  ctx.beginPath();
+  ctx.rect(cx - w/2, yTop, w, h);
+  ctx.fill();
+}
+
+function drawHex(ctx, cx, cy, D, H){
+  // simple rounded-rect-ish hex silhouette
+  const w = D, h = H;
+  const x = cx - w/2, y = cy - h/2;
+  const r = Math.min(10, h*0.25);
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y);
+  ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+  ctx.lineTo(x+w, y+h-r);
+  ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  ctx.lineTo(x+r, y+h);
+  ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+  ctx.lineTo(x, y+r);
+  ctx.quadraticCurveTo(x, y, x+r, y);
+  ctx.closePath();
+  ctx.fill();
+
+  // center hole
+  ctx.save();
+  ctx.fillStyle = "#6b7280";
+  ctx.beginPath();
+  ctx.arc(cx, cy, Math.min(w,h)*0.18, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawWasher(ctx, cx, yTop, OD, holeD, s, isTop){
+  // a simple washer plate located at yTop (top washer sits at stack top)
+  ctx.save();
+  ctx.fillStyle = "#e5e7eb";
+  ctx.strokeStyle = "#9ca3af";
+  ctx.lineWidth = 1.5;
+
+  const w = OD*s;
+  const t = 0.06*s; // visual only; actual thickness is drawn in layer blocks
+  const y = yTop + (isTop?0:0);
+
+  ctx.beginPath();
+  ctx.rect(cx - w/2, y, w, t);
+  ctx.fill();
+  ctx.stroke();
+
+  // hole
+  ctx.globalCompositeOperation = "destination-out";
+  ctx.beginPath();
+  ctx.arc(cx, y+t/2, (holeD*s)/2, 0, Math.PI*2);
+  ctx.fill();
+  ctx.globalCompositeOperation = "source-over";
+
+  ctx.restore();
+}
+
+function drawLayer(ctx, cx, yTop, t, ODref, holeD, s, label){
+  if(!t || t<=0) return;
+  const h = t*s;
+  const w = ODref*s * 1.05;
+  ctx.save();
+  ctx.fillStyle = "#f3f4f6";
+  ctx.strokeStyle = "#9ca3af";
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.rect(cx - w/2, yTop, w, h);
+  ctx.fill();
+  ctx.stroke();
+
+  // hole cutout
+  ctx.globalCompositeOperation = "destination-out";
+  ctx.beginPath();
+  ctx.rect(cx - (holeD*s)/2, yTop, (holeD*s), h);
+  ctx.fill();
+  ctx.globalCompositeOperation = "source-over";
+
+  // label
+  ctx.fillStyle = "#111827";
+  ctx.font = "12px system-ui";
+  ctx.fillText(label, cx + w/2 + 10, yTop + Math.min(14, h-2));
+  ctx.restore();
+}
+
+function drawArrow(ctx, x1,y1,x2,y2,color){
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x1,y1);
+  ctx.lineTo(x2,y2);
+  ctx.stroke();
+
+  const ang = Math.atan2(y2-y1, x2-x1);
+  const head = 10;
+  ctx.beginPath();
+  ctx.moveTo(x2,y2);
+  ctx.lineTo(x2 - head*Math.cos(ang - Math.PI/6), y2 - head*Math.sin(ang - Math.PI/6));
+  ctx.lineTo(x2 - head*Math.cos(ang + Math.PI/6), y2 - head*Math.sin(ang + Math.PI/6));
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+/* ============================================================
+   Event wiring
+   ============================================================ */
+function recalcAndDraw(runSolve){
+  updateRightPills();
+
+  const state = readState();
+  const geom = deriveGeometry(state);
+  if(geom) drawJoint(state, geom);
+
+  // Update debug quickly
+  $("debugOut").textContent = JSON.stringify({state, derived:{geom}}, null, 2);
+
+  // If requested, run stub solve
+  if(runSolve) runSolveStub();
+}
+
+function resetDefaults(){
+  $("isImperial").checked = true;
+
+  rebuildBoltFamilyOptions();
+  rebuildGradeOptions();
+  $("threadSeries").value = "coarse";
+  rebuildSizeOptions();
+
+  $("useHeadWasher").value = "yes";
+  $("tHeadWasher").value = "0.06";
+  $("odHeadWasher").value = "1.00";
+  $("matHeadWasher").value = "steel";
+
+  $("numMembers").value = "2";
+  buildMemberRows();
+
+  $("useNutWasher").value = "yes";
+  $("tNutWasher").value = "0.06";
+  $("odNutWasher").value = "1.00";
+  $("matNutWasher").value = "steel";
+
+  $("Lshank").value = "0.75";
+
+  $("Pext").value = "2000";
+  $("Ttarget").value = "120";
+  $("Ttol").value = "10";
+  $("muTmin").value = "0.12";
+  $("muTmax").value = "0.20";
+  $("muBmin").value = "0.12";
+  $("muBmax").value = "0.20";
+  $("holeDia").value = "";
+  $("proofLimit").value = "1.00";
+
+  $("frustumAngle").value = "30";
+  updateBoltEDefault();
+
+  setStatus("Ready", "ok");
+  recalcAndDraw(false);
+}
+
+function bindEvents(){
+  // Units checkbox: swaps families
+  $("isImperial").addEventListener("change", ()=>{
+    rebuildBoltFamilyOptions();
+    rebuildGradeOptions();
+    rebuildSizeOptions();
+    updateBoltEDefault();
+
+    // Adjust some default example numbers so the picture stays reasonable
+    if($("isImperial").checked){
+      $("tHeadWasher").value = "0.06";
+      $("odHeadWasher").value = "1.00";
+      $("tNutWasher").value = "0.06";
+      $("odNutWasher").value = "1.00";
+      $("Lshank").value = "0.75";
+      $("Pext").value = "2000";
+      $("Ttarget").value = "120";
+    } else {
+      $("tHeadWasher").value = "1.5";
+      $("odHeadWasher").value = "24";
+      $("tNutWasher").value = "1.5";
+      $("odNutWasher").value = "24";
+      $("Lshank").value = "20";
+      $("Pext").value = "9000";
+      $("Ttarget").value = "14000";
+    }
+
+    recalcAndDraw(false);
+  });
+
+  $("boltFamily").addEventListener("change", ()=>{
+    rebuildGradeOptions();
+    rebuildSizeOptions();
+    // default E per units
+    updateBoltEDefault();
+    recalcAndDraw(false);
+  });
+
+  $("threadSeries").addEventListener("change", ()=>{
+    rebuildSizeOptions();
+    recalcAndDraw(false);
+  });
+
+  $("boltGrade").addEventListener("change", ()=>recalcAndDraw(false));
+  $("boltSize").addEventListener("change", ()=>recalcAndDraw(false));
+
+  // Geometry inputs
+  [
+    "useHeadWasher","tHeadWasher","odHeadWasher","matHeadWasher",
+    "useNutWasher","tNutWasher","odNutWasher","matNutWasher",
+    "Lshank","frustumAngle","boltE"
+  ].forEach(id=>{
+    $(id).addEventListener("input", ()=>recalcAndDraw(false));
+    $(id).addEventListener("change", ()=>recalcAndDraw(false));
+  });
+
+  $("numMembers").addEventListener("change", ()=>{
+    buildMemberRows();
+    recalcAndDraw(false);
+  });
+
+  // Loads
+  ["Pext","Ttarget","Ttol","muTmin","muTmax","muBmin","muBmax","holeDia","proofLimit"]
+    .forEach(id=>{
+      $(id).addEventListener("input", ()=>recalcAndDraw(false));
+      $(id).addEventListener("change", ()=>recalcAndDraw(false));
+    });
+
+  // Buttons
+  $("btnSolve").addEventListener("click", runSolveStub);
+  $("btnRedraw").addEventListener("click", ()=>recalcAndDraw(false));
+  $("btnReset").addEventListener("click", resetDefaults);
+}
+
+/* ============================================================
+   Init
+   ============================================================ */
+(function init(){
+  // Materials selects
+  buildMaterialsSelect($("matHeadWasher"));
+  buildMaterialsSelect($("matNutWasher"));
+  $("matHeadWasher").value = "steel";
+  $("matNutWasher").value = "steel";
+
+  rebuildBoltFamilyOptions();
+  rebuildGradeOptions();
+  rebuildSizeOptions();
+  updateBoltEDefault();
+
+  buildMemberRows();
+  bindEvents();
+  resetDefaults();
+})();
+</script>
+</body>
+</html>
