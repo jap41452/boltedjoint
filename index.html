@@ -262,11 +262,13 @@
         </div>
       </div>
 
-      <div class="btnbar" style="margin-top:10px;">
-        <button class="primary" id="btnSolve">Solve / Size Bolt (stub)</button>
-        <button id="btnRedraw">Redraw Only</button>
-        <button id="btnReset">Reset Defaults</button>
-      </div>
+<div class="btnbar" style="margin-top:10px;">
+  <button class="primary" id="btnScan">Minimum Size Scan</button>
+  <button id="btnSolve">Solve / Check Current Size</button>
+  <button id="btnRedraw">Redraw Only</button>
+  <button id="btnReset">Reset Defaults</button>
+</div>
+
       <div class="small muted" style="margin-top:6px;">
         Current solver is <b>stubbed</b> but computes geometry, stiffness placeholders, load fraction, and draws scaled joint immediately.
       </div>
@@ -996,82 +998,54 @@ function calcProofLoad(state){
 /* ============================================================
    Solver (stub) + output tables
    ============================================================ */
-function runSolveStub(){
+
+function runSolveForCurrentSelection(){
   const state = readState();
-  const geom = deriveGeometry(state);
-  if(!geom){
+  const ev = evaluateCurrentBolt(state);
+
+  if(!ev.geom){
     setStatus("No bolt selected", "err");
     return;
   }
 
-  const kbOut = calcBoltStiffness(state, geom);
-  const kmOut = calcMemberStiffnessShigley(state, geom);
-  const C = (kbOut.kb + kmOut.km) > 0 ? kbOut.kb/(kbOut.kb + kmOut.km) : null;
-
-const preload = calcPreloadBoundsThreadBearing(state, geom);
-  const Fproof = calcProofLoad(state);
-
-  // Checks (still meaningful even with placeholder mapping)
-  const P = state.loads.P;
-  const sepReq = (C!==null) ? (1-C)*P : null;
-  const sepMargin = (preload?.Fmin!=null && sepReq!=null) ? (preload.Fmin - sepReq) : null;
-
-  const FbMax = (preload?.Fmax!=null && C!=null) ? (preload.Fmax + C*P) : null;
-  const proofMargin = (Fproof!=null && FbMax!=null) ? (state.loads.proofLimit*Fproof - FbMax) : null;
-
-  // Status pill
-  let status = "Stub OK";
+  // Status logic (same as before)
+  let status = "OK";
   let cls = "ok";
-  if(sepMargin!==null && sepMargin < 0){ status = "Separates (stub)"; cls="err"; }
-  else if(proofMargin!==null && proofMargin < 0){ status = "Over proof (stub)"; cls="err"; }
-  else if(sepMargin!==null && sepMargin < 0.05*Math.max(1,sepReq||1)){ status = "Low sep margin"; cls="warn"; }
-
+  if(ev.sepMargin!=null && ev.sepMargin < 0){ status = "Separates"; cls="err"; }
+  else if(ev.proofMargin!=null && ev.proofMargin < 0){ status = "Over proof"; cls="err"; }
+  else if(ev.sepMargin!=null && ev.sepMargin < 0.05*Math.max(1, ev.sepReq||1)){ status = "Low sep margin"; cls="warn"; }
   setStatus(status, cls);
 
-  // Build summary table
   const u = state.u;
   const rows = [
-    ["Grip length Lg", `${fmt(geom.Lg)} ${u.L}`],
-    ["Shank in grip Lsh", `${fmt(geom.Lsh)} ${u.L}`],
-    ["Thread in grip Lth", `${fmt(geom.Lth)} ${u.L}`],
-    ["Top bearing dia", `${fmt(geom.Db_top)} ${u.L}`],
-    ["Bottom bearing dia", `${fmt(geom.Db_bot)} ${u.L}`],
-    ["Hole dia", `${fmt(geom.dh)} ${u.L}`],
+    ["Grip length Lg", `${fmt(ev.geom.Lg)} ${u.L}`],
+    ["Shank in grip Lsh", `${fmt(ev.geom.Lsh)} ${u.L}`],
+    ["Thread in grip Lth", `${fmt(ev.geom.Lth)} ${u.L}`],
 
-["Torque applied at", state.loads.torqueAt === "head" ? "Head" : "Nut"],
-["Effective bearing dia Db_eff", `${fmt(preload.Db_eff)} ${u.L}`],
+    ["Torque applied at", state.loads.torqueAt === "head" ? "Head" : "Nut"],
+    ["Effective bearing dia Db_eff", `${fmt(ev.preload?.Db_eff)} ${u.L}`],
 
-    ["Bolt stiffness kb (placeholder)", `${fmt(kbOut.kb)} ${u.F}/${u.L}`],
-    ["Member stiffness km (placeholder)", `${fmt(kmOut.km)} ${u.F}/${u.L}`],
-    ["Load fraction C = kb/(kb+km)", `${fmt(C,5)}`],
+    ["Bolt stiffness kb", `${fmt(ev.kbOut?.kb)} ${u.F}/${u.L}`],
+    ["Member stiffness km (Shigley)", `${fmt(ev.kmOut?.km)} ${u.F}/${u.L}`],
+    ["Load fraction C", `${fmt(ev.C,5)}`],
 
-    ["Torque Tmin", `${fmt(preload.Tmin)} ${u.T}`],
-    ["Torque Tmax", `${fmt(preload.Tmax)} ${u.T}`],
-    ["Preload Fi,min (placeholder)", `${fmt(preload.Fmin)} ${u.F}`],
-    ["Preload Fi,max (placeholder)", `${fmt(preload.Fmax)} ${u.F}`],
+    ["Torque Tmin", `${fmt(ev.preload?.Tmin)} ${u.T}`],
+    ["Torque Tmax", `${fmt(ev.preload?.Tmax)} ${u.T}`],
+    ["Preload Fi,min", `${fmt(ev.preload?.Fmin)} ${u.F}`],
+    ["Preload Fi,max", `${fmt(ev.preload?.Fmax)} ${u.F}`],
 
-    ["Separation requirement (1−C)P", `${fmt(sepReq)} ${u.F}`],
-    ["Separation margin Fi,min − (1−C)P", `${fmt(sepMargin)} ${u.F}`],
+    ["Separation requirement (1−C)P", `${fmt(ev.sepReq)} ${u.F}`],
+    ["Separation margin", `${fmt(ev.sepMargin)} ${u.F}`],
 
-    ["Proof load Fproof", `${fmt(Fproof)} ${u.F}`],
-    ["Max bolt load Fi,max + C·P", `${fmt(FbMax)} ${u.F}`],
-    ["Proof margin (limit·Fproof − FbMax)", `${fmt(proofMargin)} ${u.F}`]
+    ["Proof load Fproof", `${fmt(ev.Fproof)} ${u.F}`],
+    ["Max bolt load Fi,max + C·P", `${fmt(ev.FbMax)} ${u.F}`],
+    ["Proof margin", `${fmt(ev.proofMargin)} ${u.F}`]
   ];
   renderSummary(rows);
 
-  // Drawing
-  drawJoint(state, geom);
-
-  // Debug snapshot
-  const snapshot = {
-    state,
-    derived: { geom, kbOut, kmOut, C, preload, Fproof, sepReq, sepMargin, FbMax, proofMargin },
-    notes: [
-      "Member stiffness and torque->preload are placeholders.",
-      "Washer OD used as bearing diameter when washer is enabled; otherwise head/nut bearing diameter."
-    ]
-  };
-  $("debugOut").textContent = JSON.stringify(snapshot, null, 2);
+  // Draw + debug
+  drawJoint(state, ev.geom);
+  $("debugOut").textContent = JSON.stringify({ state, eval: ev }, null, 2);
 }
 
 function renderSummary(rows){
@@ -1640,10 +1614,15 @@ function bindEvents(){
 
 
   // Buttons
-  $("btnSolve").addEventListener("click", runSolveStub);
+  $("btnSolve").addEventListener("click", runSolveForCurrentSelection);
   $("btnRedraw").addEventListener("click", ()=>recalcAndDraw(false));
   $("btnReset").addEventListener("click", resetDefaults);
+
+$("btnScan").addEventListener("click", runSizeScan);
+
 }
+
+
 
 /* ============================================================
    Init
@@ -1664,9 +1643,108 @@ function bindEvents(){
   bindEvents();
   resetDefaults();
 })();
+
+function evaluateCurrentBolt(state){
+  const geom = deriveGeometry(state);
+  if(!geom || !state.bolt.data) return { ok:false, reason:"No bolt/geometry" };
+
+  // Stiffnesses
+  const kbOut = calcBoltStiffness(state, geom);
+  const kmOut = calcMemberStiffnessShigley(state, geom);
+  const C = (kbOut.kb + kmOut.km) > 0 ? kbOut.kb/(kbOut.kb + kmOut.km) : null;
+
+  // Preload bounds from real thread+bearing model
+  const preload = calcPreloadBoundsThreadBearing(state, geom);
+
+  // Proof
+  const Fproof = calcProofLoad(state);
+
+  // Checks
+  const P = state.loads.P;
+  const sepReq = (C!=null) ? (1-C)*P : null;
+  const sepMargin = (preload?.Fmin!=null && sepReq!=null) ? (preload.Fmin - sepReq) : null;
+
+  const FbMax = (preload?.Fmax!=null && C!=null) ? (preload.Fmax + C*P) : null;
+  const proofMargin = (Fproof!=null && FbMax!=null) ? (state.loads.proofLimit*Fproof - FbMax) : null;
+
+  const okSep = (sepMargin==null) ? false : (sepMargin >= 0);
+  const okProof = (proofMargin==null) ? false : (proofMargin >= 0);
+  const ok = okSep && okProof;
+
+  return {
+    ok,
+    geom, kbOut, kmOut, C,
+    preload, Fproof,
+    sepReq, sepMargin,
+    FbMax, proofMargin
+  };
+}
+
+function runSizeScan(){
+  const base = readState();
+  const family = base.bolt.family;
+  const series = base.bolt.series;
+
+  const list = (BOLTS[family] && BOLTS[family][series]) ? BOLTS[family][series] : [];
+  if(!list.length){
+    setStatus("No sizes to scan", "err");
+    return;
+  }
+
+  // Keep current hole override if user provided one; otherwise allow size defaults to change by size.
+  const holeOverride = base.loads.holeDiaOverride;
+
+  let bestIdx = null;
+  let bestEval = null;
+
+  for(let idx=0; idx<list.length; idx++){
+    const state = JSON.parse(JSON.stringify(base)); // modern browsers OK
+    state.bolt.sizeIdx = idx;
+    state.bolt.data = list[idx];
+
+    // If no hole override, deriveGeometry will use bolt default hole for that size (good)
+    state.loads.holeDiaOverride = holeOverride;
+
+    const ev = evaluateCurrentBolt(state);
+    if(ev.ok){
+      bestIdx = idx;
+      bestEval = ev;
+      break; // smallest passing
+    }
+  }
+
+  if(bestIdx === null){
+    setStatus("No passing size (scan)", "err");
+
+    // Optional: show worst offender for the largest bolt (for diagnostics)
+    // Evaluate last size:
+    const state = structuredClone(base);
+    state.bolt.sizeIdx = list.length-1;
+    state.bolt.data = list[list.length-1];
+    state.loads.holeDiaOverride = holeOverride;
+    const ev = evaluateCurrentBolt(state);
+    $("debugOut").textContent = JSON.stringify({
+      message:"No passing size found in current table range.",
+      lastTried:list[list.length-1]?.label,
+      lastEval:ev
+    }, null, 2);
+    return;
+  }
+
+  // Update UI selection to chosen size
+  $("boltSize").value = String(bestIdx);
+  updateRightPills();
+
+  // Run the standard solve/report pipeline for the selected size
+  // (reuse your existing solve function but make sure it uses evaluateCurrentBolt or the same logic)
+  runSolveForCurrentSelection();
+
+  setStatus(`Scan OK → ${list[bestIdx].label}`, "ok");
+}
 </script>
 </body>
 </html>
+
 
 
 
