@@ -858,46 +858,36 @@ function updateRightPills(){
 /* ============================================================
    Drawing (scaled)
    ============================================================ */
+
 function drawJoint(state, geom){
   const c = $("jointCanvas");
   const ctx = c.getContext("2d");
   ctx.clearRect(0,0,c.width,c.height);
 
-  // Basic layout
-  const pad = 40;
+  const pad = 50;
   const W = c.width, H = c.height;
-
-  // Coordinate system: y increases downward.
   const centerX = W*0.5;
-  const topY = pad + 20;
-  const bottomY = H - pad - 20;
 
-  // Total stack height for drawing (include head/nut thickness visually)
   const b = state.bolt.data;
+  if(!b) return;
 
-  // Visual head/nut thickness
+  // --- Scale ---
   const headH = b.headH;
-  const nutH = b.nutH;
-
+  const nutH  = b.nutH;
   const stackH = geom.Lg;
   const totalH = headH + stackH + nutH;
 
-  // Scale so totalH fits in available height
-  const availH = (bottomY - topY);
+  const topY = pad + 10;
+  const bottomY = H - pad - 10;
+  const availH = bottomY - topY;
+
+  const maxD = Math.max(b.headD, b.nutD, geom.Db_top, geom.Db_bot, b.d);
+  const availX = W - 2*pad;
+
   const sY = totalH > 0 ? (availH / totalH) : 1;
+  const sX = maxD > 0 ? (0.55*availX / maxD) : 1; // allow wide plates
+  const s  = Math.min(sX, sY);
 
-  // Scale X based on max diameter among head/nut/washer ODs
-  const maxD = Math.max(
-    b.headD, b.nutD,
-    geom.Db_top, geom.Db_bot,
-    b.d*1.2
-  );
-  const availX = (W - 2*pad);
-  const sX = maxD > 0 ? (0.42*availX / maxD) : 1; // keep margins
-
-  const s = Math.min(sX, sY);
-
-  // Utility convert (diameter to pixels)
   const Dpx = D => D*s;
   const Lpx = L => L*s;
 
@@ -909,147 +899,258 @@ function drawJoint(state, geom){
   const yNutTop = yStackBot;
   const yNutBot = yNutTop + Lpx(nutH);
 
-  // Background guide
-  ctx.save();
-  ctx.strokeStyle = "#e5e7eb";
-  ctx.lineWidth = 1;
-  ctx.setLineDash([6,6]);
-  ctx.strokeRect(pad, topY, W-2*pad, yNutBot-topY);
-  ctx.restore();
+  // --- Plate geometry (full width like Shigley) ---
+  const plateHalfW = Math.max(Dpx(maxD)*1.10, (W - 2*pad)*0.36); // strong “plate” look
+  const holeW = Dpx(geom.dh);
 
-  // Draw bolt shank & threads zone
-  const shankD = b.d;
-  const coreD = b.d*0.85;
-
-  // Define threaded region within grip based on Lsh/Lth
+  // --- Bolt geometry ---
+  const shankW = Dpx(b.d)*0.70;             // slimmer than before
+  const threadW = shankW*0.92;
   const yThreadStart = yStackTop + Lpx(geom.Lsh);
   const yThreadEnd   = yStackBot;
 
-  // Bolt body
+  // --- Draw members as hatched plates ---
+  // Build a list of layers in the grip region (washer layers included so they appear as thin plates)
+  const layers = [];
+  if(state.geom.useHeadWasher){
+    layers.push({ t: state.geom.tHeadWasher, hatch: false, label: "" , kind:"washer", atTop:true });
+  }
+  state.geom.members.forEach((m,i)=>{
+    layers.push({ t: m.t, hatch: true, hatchDir: (i%2===0? 1:-1), label:"", kind:"member" });
+  });
+  if(state.geom.useNutWasher){
+    layers.push({ t: state.geom.tNutWasher, hatch: false, label:"", kind:"washer", atTop:false });
+  }
+
+  // Draw stack layers (full width rectangles, hatched for members)
+  let y = yStackTop;
+  layers.forEach((L, idx)=>{
+    const h = Lpx(L.t);
+    // Plate outline
+    ctx.save();
+    ctx.fillStyle = (L.kind==="washer") ? "#eef2f7" : "#f7f7f7";
+    ctx.strokeStyle = "#6b7280";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.rect(centerX - plateHalfW, y, 2*plateHalfW, h);
+    ctx.fill();
+    ctx.stroke();
+
+    // Hole (clearance)
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.fillRect(centerX - holeW/2, y, holeW, h);
+    ctx.globalCompositeOperation = "source-over";
+
+    // Hatch for members
+    if(L.hatch){
+      hatchRect(ctx,
+        centerX - plateHalfW, y,
+        2*plateHalfW, h,
+        L.hatchDir, 10, "#9ca3af"
+      );
+    }
+
+    ctx.restore();
+
+    y += h;
+  });
+
+  // --- Draw bolt shank (pink-ish like the book) ---
   ctx.save();
-  ctx.fillStyle = "#d1d5db"; // bolt fill
-  // Shank rectangle through full assembly
-  drawCenteredRect(ctx, centerX, yHeadTop, Dpx(shankD*0.9), yNutBot-yHeadTop);
+  ctx.fillStyle = "#d6a3a8";        // bolt body tone
+  ctx.strokeStyle = "#7c2d32";
+  ctx.lineWidth = 1.25;
+
+  // Shank through entire joint
+  ctx.beginPath();
+  ctx.rect(centerX - shankW/2, yHeadTop + 2, shankW, (yNutBot - yHeadTop) - 4);
+  ctx.fill();
+  ctx.stroke();
   ctx.restore();
 
-  // Thread hatch in grip threaded zone (visual)
+  // --- Threads: sketch diagonal lines in threaded portion ONLY (extends into members like Fig 8-12) ---
   ctx.save();
-  ctx.strokeStyle = "#6b7280";
+  ctx.strokeStyle = "#7c2d32";
   ctx.lineWidth = 1;
-  const xL = centerX - Dpx(coreD)/2;
-  const xR = centerX + Dpx(coreD)/2;
-  for(let y=yThreadStart; y<yThreadEnd; y+=10){
+  const xL = centerX - threadW/2;
+  const xR = centerX + threadW/2;
+  for(let yy=yThreadStart; yy<yThreadEnd; yy+=9){
     ctx.beginPath();
-    ctx.moveTo(xL, y);
-    ctx.lineTo(xR, y+10);
+    ctx.moveTo(xL, yy);
+    ctx.lineTo(xR, yy+9);
     ctx.stroke();
   }
   ctx.restore();
 
-  // Draw head
+  // --- Head & Nut (hex blocks) ---
   ctx.save();
-  ctx.fillStyle = "#9ca3af";
-  drawHex(ctx, centerX, yHeadTop + Lpx(headH)/2, Dpx(b.headD), Lpx(headH));
+  ctx.fillStyle = "#c78f95";
+  ctx.strokeStyle = "#7c2d32";
+  ctx.lineWidth = 1.25;
+
+  // Head
+  drawHexBlock(ctx, centerX, yHeadTop, Dpx(b.headD), Lpx(headH), 10);
+  // Nut
+  drawHexBlock(ctx, centerX, yNutTop,  Dpx(b.nutD),  Lpx(nutH),  10);
+
   ctx.restore();
 
-  // Draw nut
-  ctx.save();
-  ctx.fillStyle = "#9ca3af";
-  drawHex(ctx, centerX, yNutTop + Lpx(nutH)/2, Dpx(b.nutD), Lpx(nutH));
-  ctx.restore();
-
-  // Draw washers (if used)
+  // --- Washers as thin rings seated under head / above nut (when enabled) ---
   if(state.geom.useHeadWasher){
-    drawWasher(ctx, centerX, yStackTop, geom.Db_top, geom.dh, s, true);
-  }
-  if(state.geom.useNutWasher){
-    drawWasher(ctx, centerX, yStackBot - Lpx(state.geom.tNutWasher), geom.Db_bot, geom.dh, s, false);
-  }
-
-  // Draw clamped members stack with shading
-  let y = yStackTop;
-  // top washer thickness region is part of stack, draw as a thin plate if washer used
-  if(state.geom.useHeadWasher){
-    const t = state.geom.tHeadWasher;
-    drawLayer(ctx, centerX, y, t, geom.Db_top, geom.dh, s, "Head washer");
-    y += Lpx(t);
-  }
-
-  for(let i=0;i<state.geom.members.length;i++){
-    const m = state.geom.members[i];
-    drawLayer(ctx, centerX, y, m.t, Math.max(geom.Db_top, geom.Db_bot), geom.dh, s, `Member ${i+1}`);
-    y += Lpx(m.t);
+    drawRingWasher(ctx, centerX, yStackTop, Dpx(geom.Db_top), holeW, Math.max(3, Lpx(state.geom.tHeadWasher)));
+  } else {
+    // visually suggest bearing face under head
+    drawBearingFace(ctx, centerX, yStackTop, Dpx(b.headD)*0.92, shankW);
   }
 
   if(state.geom.useNutWasher){
-    const t = state.geom.tNutWasher;
-    drawLayer(ctx, centerX, y, t, geom.Db_bot, geom.dh, s, "Nut washer");
-    y += Lpx(t);
+    const yW = yStackBot - Math.max(3, Lpx(state.geom.tNutWasher));
+    drawRingWasher(ctx, centerX, yW, Dpx(geom.Db_bot), holeW, Math.max(3, Lpx(state.geom.tNutWasher)));
+  } else {
+    drawBearingFace(ctx, centerX, yStackBot-2, Dpx(b.nutD)*0.92, shankW);
   }
 
-  // Draw frustum spread lines (schematic)
+  // --- Frustum boundaries (subtle, not huge X’s) ---
+  // In the book, you *infer* the frustum; draw faint 30° boundaries without crossing drama.
+  const ang = (state.geom.frustumAngleDeg||30) * Math.PI/180;
+  const spread = 2*Math.tan(ang); // diameter increase per unit length
+
   ctx.save();
   ctx.strokeStyle = "#ef4444";
+  ctx.globalAlpha = 0.55;
   ctx.lineWidth = 2;
 
-  const ang = (state.geom.frustumAngleDeg||30) * Math.PI/180;
-  const spreadPerL = 2*Math.tan(ang); // diameter increase per unit thickness
-
-  const D0_top = geom.Db_top;
-  const D0_bot = geom.Db_bot;
-
-  // Top frustum line down
-  const y0 = yStackTop;
-  const y1 = yStackBot;
-  const D1_top = D0_top + spreadPerL*geom.Lg;
-  // Left edge line
+  // from top bearing down
+  const D0t = geom.Db_top;
+  const D1t = D0t + spread*geom.Lg;
   ctx.beginPath();
-  ctx.moveTo(centerX - Dpx(D0_top)/2, y0);
-  ctx.lineTo(centerX - Dpx(D1_top)/2, y1);
+  ctx.moveTo(centerX - Dpx(D0t)/2, yStackTop);
+  ctx.lineTo(centerX - Dpx(D1t)/2, yStackBot);
   ctx.stroke();
-  // Right edge line
   ctx.beginPath();
-  ctx.moveTo(centerX + Dpx(D0_top)/2, y0);
-  ctx.lineTo(centerX + Dpx(D1_top)/2, y1);
+  ctx.moveTo(centerX + Dpx(D0t)/2, yStackTop);
+  ctx.lineTo(centerX + Dpx(D1t)/2, yStackBot);
   ctx.stroke();
 
-  // Bottom frustum line up
-  const D1_bot = D0_bot + spreadPerL*geom.Lg;
+  // from bottom bearing up
+  const D0b = geom.Db_bot;
+  const D1b = D0b + spread*geom.Lg;
   ctx.beginPath();
-  ctx.moveTo(centerX - Dpx(D0_bot)/2, y1);
-  ctx.lineTo(centerX - Dpx(D1_bot)/2, y0);
+  ctx.moveTo(centerX - Dpx(D0b)/2, yStackBot);
+  ctx.lineTo(centerX - Dpx(D1b)/2, yStackTop);
   ctx.stroke();
-
   ctx.beginPath();
-  ctx.moveTo(centerX + Dpx(D0_bot)/2, y1);
-  ctx.lineTo(centerX + Dpx(D1_bot)/2, y0);
+  ctx.moveTo(centerX + Dpx(D0b)/2, yStackBot);
+  ctx.lineTo(centerX + Dpx(D1b)/2, yStackTop);
   ctx.stroke();
 
   ctx.restore();
 
-  // External load arrows P (top plate up, bottom plate down)
-  drawArrow(ctx, centerX - Dpx(maxD)*0.55, yStackTop + 10, centerX - Dpx(maxD)*0.55, yStackTop - 50, "#111827");
-  drawArrow(ctx, centerX + Dpx(maxD)*0.55, yStackTop + 10, centerX + Dpx(maxD)*0.55, yStackTop - 50, "#111827");
-  drawArrow(ctx, centerX - Dpx(maxD)*0.55, yStackBot - 10, centerX - Dpx(maxD)*0.55, yStackBot + 50, "#111827");
-  drawArrow(ctx, centerX + Dpx(maxD)*0.55, yStackBot - 10, centerX + Dpx(maxD)*0.55, yStackBot + 50, "#111827");
+  // --- Load arrows P (like Shigley) ---
+  const xA1 = centerX - plateHalfW*0.72;
+  const xA2 = centerX + plateHalfW*0.72;
+
+  drawArrow(ctx, xA1, yStackTop + 8, xA1, yStackTop - 55, "#111827");
+  drawArrow(ctx, xA2, yStackTop + 8, xA2, yStackTop - 55, "#111827");
+  drawArrow(ctx, xA1, yStackBot - 8, xA1, yStackBot + 55, "#111827");
+  drawArrow(ctx, xA2, yStackBot - 8, xA2, yStackBot + 55, "#111827");
 
   ctx.save();
   ctx.fillStyle = "#111827";
   ctx.font = "16px system-ui";
-  ctx.fillText("P", centerX - Dpx(maxD)*0.57 - 10, yStackTop - 58);
-  ctx.fillText("P", centerX + Dpx(maxD)*0.57 - 10, yStackTop - 58);
-  ctx.fillText("P", centerX - Dpx(maxD)*0.57 - 10, yStackBot + 68);
-  ctx.fillText("P", centerX + Dpx(maxD)*0.57 - 10, yStackBot + 68);
+  ctx.fillText("P", xA1 - 10, yStackTop - 62);
+  ctx.fillText("P", xA2 - 10, yStackTop - 62);
+  ctx.fillText("P", xA1 - 10, yStackBot + 72);
+  ctx.fillText("P", xA2 - 10, yStackBot + 72);
   ctx.restore();
 
-  // Labels
+  // --- Caption-like small labels (optional) ---
   ctx.save();
   ctx.fillStyle = "#111827";
-  ctx.font = "14px system-ui";
-  ctx.fillText(`Grip Lg = ${fmt(geom.Lg)} ${state.u.L}`, pad, topY - 10);
-  ctx.fillText(`Db(top)=${fmt(geom.Db_top)}  Db(bot)=${fmt(geom.Db_bot)}  dh=${fmt(geom.dh)}  (units: ${state.u.L})`, pad, yNutBot + 22);
+  ctx.font = "13px system-ui";
+  ctx.fillText(`Grip Lg = ${fmt(geom.Lg)} ${state.u.L}`, pad, topY - 8);
   ctx.restore();
 }
+
+// ---- Helpers ----
+
+// hatch inside a rectangle (used for “sectioned plates” look)
+function hatchRect(ctx, x, y, w, h, dir=1, step=10, color="#9ca3af"){
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+
+  // clip to rect
+  ctx.beginPath();
+  ctx.rect(x,y,w,h);
+  ctx.clip();
+
+  // draw diagonal lines
+  const diag = Math.sqrt(w*w + h*h);
+  const angle = (dir>=0) ? Math.PI/4 : -Math.PI/4;
+
+  ctx.translate(x + w/2, y + h/2);
+  ctx.rotate(angle);
+
+  for(let t=-diag; t<=diag; t+=step){
+    ctx.beginPath();
+    ctx.moveTo(t, -diag);
+    ctx.lineTo(t,  diag);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function drawHexBlock(ctx, cx, yTop, w, h, chamfer=10){
+  // A “hex-ish” block: chamfered rectangle reads like a bolt head/nut in section
+  const x = cx - w/2;
+  const y = yTop;
+  const c = Math.min(chamfer, w*0.18, h*0.35);
+
+  ctx.beginPath();
+  ctx.moveTo(x+c, y);
+  ctx.lineTo(x+w-c, y);
+  ctx.lineTo(x+w, y+h*0.5);
+  ctx.lineTo(x+w-c, y+h);
+  ctx.lineTo(x+c, y+h);
+  ctx.lineTo(x, y+h*0.5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+}
+
+function drawRingWasher(ctx, cx, yTop, ODpx, holeWpx, tpx){
+  ctx.save();
+  ctx.fillStyle = "#e5e7eb";
+  ctx.strokeStyle = "#6b7280";
+  ctx.lineWidth = 1;
+
+  ctx.beginPath();
+  ctx.rect(cx - ODpx/2, yTop, ODpx, tpx);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.globalCompositeOperation = "destination-out";
+  ctx.fillRect(cx - holeWpx/2, yTop, holeWpx, tpx);
+  ctx.globalCompositeOperation = "source-over";
+  ctx.restore();
+}
+
+function drawBearingFace(ctx, cx, yAt, faceW, holeW){
+  // subtle seat line if no washer
+  ctx.save();
+  ctx.strokeStyle = "#6b7280";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cx - faceW/2, yAt);
+  ctx.lineTo(cx - holeW/2, yAt);
+  ctx.moveTo(cx + holeW/2, yAt);
+  ctx.lineTo(cx + faceW/2, yAt);
+  ctx.stroke();
+  ctx.restore();
+}
+
 
 function drawCenteredRect(ctx, cx, yTop, w, h){
   ctx.beginPath();
@@ -1311,3 +1412,4 @@ function bindEvents(){
 </script>
 </body>
 </html>
+
