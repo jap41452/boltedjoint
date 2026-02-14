@@ -884,27 +884,77 @@ function frustumCompliance(E, dh, D0, D1, tanA){
 // Replace later with thread+bearing torque physics.
 // For now, use K-factor approximation derived from μ ranges:
 // K ≈ 0.2 baseline, scaled by (μt+μb)
-function torqueToPreloadPlaceholder(T, d_nom, muT, muB){
-  const K = 0.14 + 0.35 * (0.5*(muT+muB)); // crude
-  if(K<=0 || d_nom<=0) return null;
-  return T/(K*d_nom);
-}
 
-function calcPreloadBoundsPlaceholder(state){
+
+// ============================================================
+// Real torque -> preload mapping (thread + bearing)
+// T = F * [ (d2/2)*tan(lambda + phi) + mu_b*(Db/2) ]
+// where lambda = atan(lead/(pi*d2)), phi = atan(mu_t*sec(alpha))
+// alpha = 30 deg for 60° threads (UN/Metric)
+// Db = effective bearing friction diameter ~ (D_outer + D_inner)/2
+// Assumes torque applied at the NUT (bearing under nut/washer).
+// ============================================================
+
+function calcPreloadBoundsThreadBearing(state, geom){
   const b = state.bolt.data;
   if(!b) return null;
+
   const T = state.loads.T;
   const tol = state.loads.TtolPct;
-  const Tmin = T*(1-tol);
-  const Tmax = T*(1+tol);
+
+  const Tmin = T*(1 - tol);
+  const Tmax = T*(1 + tol);
+
+  // Effective bearing friction diameter at NUT side:
+  // Outer = bearing diameter at bottom (washer OD if used, else nut bearing dia)
+  // Inner = clearance hole diameter
+  const D_outer = geom.Db_bot;
+  const D_inner = geom.dh;
+  const Db_eff  = 0.5*(D_outer + D_inner);
 
   // Worst-case mapping:
-  // Fmin => low torque + high friction
-  const Fmin = torqueToPreloadPlaceholder(Tmin, b.d, state.loads.muTmax, state.loads.muBmax);
-  // Fmax => high torque + low friction
-  const Fmax = torqueToPreloadPlaceholder(Tmax, b.d, state.loads.muTmin, state.loads.muBmin);
+  // Fi,min => low torque + high friction
+  const Fmin = torqueToPreloadThreadBearing(
+    Tmin, b, Db_eff,
+    state.loads.muTmax, state.loads.muBmax
+  );
 
-  return { Tmin, Tmax, Fmin, Fmax };
+  // Fi,max => high torque + low friction
+  const Fmax = torqueToPreloadThreadBearing(
+    Tmax, b, Db_eff,
+    state.loads.muTmin, state.loads.muBmin
+  );
+
+  return { Tmin, Tmax, Db_eff, Fmin, Fmax };
+}
+
+function torqueToPreloadThreadBearing(T, bolt, Db_eff, mu_t, mu_b){
+  // Guard
+  if(!(T>=0) || !bolt) return null;
+
+  // Thread geometry
+  const d2 = bolt.d2;         // pitch diameter (same units as T uses length)
+  const pitch = bolt.pitch;   // lead for single-start
+
+  if(!(d2>0) || !(pitch>0) || !(Db_eff>0)) return null;
+
+  const alpha = 30 * Math.PI/180;         // half-angle of 60° thread
+  const secA  = 1/Math.cos(alpha);
+
+  // lead angle
+  const lambda = Math.atan( pitch / (Math.PI*d2) );
+
+  // friction angle for V-thread
+  const phi = Math.atan( mu_t * secA );
+
+  // Denominator: torque per unit preload
+  const threadTerm = (d2/2) * Math.tan(lambda + phi);
+  const bearTerm   = mu_b * (Db_eff/2);
+  const denom = threadTerm + bearTerm;
+
+  if(!(denom>0)) return null;
+
+  return T / denom;
 }
 
 // Proof load
@@ -937,7 +987,7 @@ function runSolveStub(){
   const kmOut = calcMemberStiffnessShigley(state, geom);
   const C = (kbOut.kb + kmOut.km) > 0 ? kbOut.kb/(kbOut.kb + kmOut.km) : null;
 
-  const preload = calcPreloadBoundsPlaceholder(state);
+const preload = calcPreloadBoundsThreadBearing(state, geom);
   const Fproof = calcProofLoad(state);
 
   // Checks (still meaningful even with placeholder mapping)
@@ -1590,5 +1640,6 @@ function bindEvents(){
 </script>
 </body>
 </html>
+
 
 
