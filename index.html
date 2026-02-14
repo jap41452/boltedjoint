@@ -199,20 +199,39 @@
 
     <div class="card">
       <h2>Loads & Tightening Scatter</h2>
-      <div class="row3">
-        <div>
-          <label>External Load P</label>
-          <input id="Pext" type="number" step="any" value="2000" />
-        </div>
-        <div>
-          <label>Target Torque T</label>
-          <input id="Ttarget" type="number" step="any" value="120" />
-        </div>
-        <div>
-          <label>Torque Tolerance (±%)</label>
-          <input id="Ttol" type="number" step="any" value="10" />
-        </div>
-      </div>
+
+  <div class="row3">
+  <div>
+    <label>External Load P</label>
+    <input id="Pext" type="number" step="any" value="2000" />
+  </div>
+  <div>
+    <label>Target Torque T</label>
+    <input id="Ttarget" type="number" step="any" value="120" />
+  </div>
+  <div>
+    <label>Torque Applied At</label>
+    <select id="torqueAt">
+      <option value="nut" selected>Nut</option>
+      <option value="head">Head</option>
+    </select>
+  </div>
+</div>
+
+<div class="row3">
+  <div>
+    <label>Torque Tolerance (±%)</label>
+    <input id="Ttol" type="number" step="any" value="10" />
+  </div>
+  <div>
+    <label>μ_thread (min)</label>
+    <input id="muTmin" type="number" step="any" value="0.12" />
+  </div>
+  <div>
+    <label>μ_thread (max)</label>
+    <input id="muTmax" type="number" step="any" value="0.20" />
+  </div>
+</div>
 
       <div class="row3">
         <div>
@@ -576,17 +595,19 @@ function readState(){
       members,
       Lshank: Number($("Lshank").value || 0)
     },
-    loads: {
-      P: Number($("Pext").value || 0),
-      T: Number($("Ttarget").value || 0),
-      TtolPct: Number($("Ttol").value || 0) / 100,
-      muTmin: Number($("muTmin").value || 0),
-      muTmax: Number($("muTmax").value || 0),
-      muBmin: Number($("muBmin").value || 0),
-      muBmax: Number($("muBmax").value || 0),
-      holeDiaOverride: $("holeDia").value.trim()==="" ? null : Number($("holeDia").value),
-      proofLimit: Number($("proofLimit").value || 1.0)
-    }
+loads: {
+  P: Number($("Pext").value || 0),
+  T: Number($("Ttarget").value || 0),
+  torqueAt: $("torqueAt").value, // "nut" | "head"
+  TtolPct: Number($("Ttol").value || 0) / 100,
+  muTmin: Number($("muTmin").value || 0),
+  muTmax: Number($("muTmax").value || 0),
+  muBmin: Number($("muBmin").value || 0),
+  muBmax: Number($("muBmax").value || 0),
+  holeDiaOverride: $("holeDia").value.trim()==="" ? null : Number($("holeDia").value),
+  proofLimit: Number($("proofLimit").value || 1.0)
+}
+
   };
   return state;
 }
@@ -908,9 +929,9 @@ function calcPreloadBoundsThreadBearing(state, geom){
   // Effective bearing friction diameter at NUT side:
   // Outer = bearing diameter at bottom (washer OD if used, else nut bearing dia)
   // Inner = clearance hole diameter
-  const D_outer = geom.Db_bot;
-  const D_inner = geom.dh;
-  const Db_eff  = 0.5*(D_outer + D_inner);
+const D_outer = (state.loads.torqueAt === "head") ? geom.Db_top : geom.Db_bot;
+const D_inner = geom.dh;
+const Db_eff  = 0.5*(D_outer + D_inner);
 
   // Worst-case mapping:
   // Fi,min => low torque + high friction
@@ -1016,6 +1037,9 @@ const preload = calcPreloadBoundsThreadBearing(state, geom);
     ["Top bearing dia", `${fmt(geom.Db_top)} ${u.L}`],
     ["Bottom bearing dia", `${fmt(geom.Db_bot)} ${u.L}`],
     ["Hole dia", `${fmt(geom.dh)} ${u.L}`],
+
+["Torque applied at", state.loads.torqueAt === "head" ? "Head" : "Nut"],
+["Effective bearing dia Db_eff", `${fmt(preload.Db_eff)} ${u.L}`],
 
     ["Bolt stiffness kb (placeholder)", `${fmt(kbOut.kb)} ${u.F}/${u.L}`],
     ["Member stiffness km (placeholder)", `${fmt(kmOut.km)} ${u.F}/${u.L}`],
@@ -1538,6 +1562,7 @@ function resetDefaults(){
   $("proofLimit").value = "1.00";
 
   $("frustumAngle").value = "30";
+$("torqueAt").value = "nut";
   updateBoltEDefault();
 
   setStatus("Ready", "ok");
@@ -1606,11 +1631,13 @@ function bindEvents(){
   });
 
   // Loads
-  ["Pext","Ttarget","Ttol","muTmin","muTmax","muBmin","muBmax","holeDia","proofLimit"]
-    .forEach(id=>{
-      $(id).addEventListener("input", ()=>recalcAndDraw(false));
-      $(id).addEventListener("change", ()=>recalcAndDraw(false));
-    });
+
+["Pext","Ttarget","torqueAt","Ttol","muTmin","muTmax","muBmin","muBmax","holeDia","proofLimit"]
+  .forEach(id=>{
+    $(id).addEventListener("input", ()=>recalcAndDraw(false));
+    $(id).addEventListener("change", ()=>recalcAndDraw(false));
+  });
+
 
   // Buttons
   $("btnSolve").addEventListener("click", runSolveStub);
@@ -1640,6 +1667,7 @@ function bindEvents(){
 </script>
 </body>
 </html>
+
 
 
 
