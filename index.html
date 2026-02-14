@@ -75,7 +75,7 @@
   <!-- LEFT PANEL -->
   <div id="left">
     <h1>Bolted Joint — Preload Sizing (Skeleton)</h1>
-    <p class="sub">Single-file UI + scaled joint drawing + data model + stubbed calculation pipeline.</p>
+    <p class="sub">Single-file UI + scaled joint drawing + data model + calculation pipeline.</p>
 
     <div class="card">
       <h2>Units & Standard</h2>
@@ -270,7 +270,7 @@
 </div>
 
       <div class="small muted" style="margin-top:6px;">
-        Current solver is <b>stubbed</b> but computes geometry, stiffness placeholders, load fraction, and draws scaled joint immediately.
+        Current solver computes geometry, stiffnesses, load fractions, and draws scaled joint immediately.
       </div>
     </div>
 
@@ -295,17 +295,13 @@
       </div>
 
       <div class="card">
-        <h2>Computed Summary (mostly stubbed)</h2>
+        <h2>Computed Summary </h2>
         <table class="table" id="summaryTable">
           <thead><tr><th>Quantity</th><th>Value</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
 
-      <div class="card">
-        <h2>Debug / Data Model Snapshot</h2>
-        <pre id="debugOut">{}</pre>
-      </div>
     </div>
   </div>
 </div>
@@ -996,7 +992,7 @@ function calcProofLoad(state){
 }
 
 /* ============================================================
-   Solver (stub) + output tables
+   Solver + output tables
    ============================================================ */
 
 function runSolveForCurrentSelection(){
@@ -1045,7 +1041,7 @@ function runSolveForCurrentSelection(){
 
   // Draw + debug
   drawJoint(state, ev.geom);
-  $("debugOut").textContent = JSON.stringify({ state, eval: ev }, null, 2);
+//  $("debugOut").textContent = JSON.stringify({ state, eval: ev }, null, 2);
 }
 
 function renderSummary(rows){
@@ -1090,34 +1086,33 @@ function drawJoint(state, geom){
   const ctx = c.getContext("2d");
   ctx.clearRect(0,0,c.width,c.height);
 
-  const pad = 50;
+  const pad = 55;
   const W = c.width, H = c.height;
-  const centerX = W*0.5;
+  const cx = W*0.5;
 
   const b = state.bolt.data;
-  if(!b) return;
+  if(!b || !geom) return;
 
-  // --- Scale ---
-  const headH = b.headH;
-  const nutH  = b.nutH;
+  // ---- Scale model ----
+  const headH = b.headH, nutH = b.nutH;
   const stackH = geom.Lg;
   const totalH = headH + stackH + nutH;
 
-  const topY = pad + 10;
-  const bottomY = H - pad - 10;
-  const availH = bottomY - topY;
+  const topY = pad;
+  const botY = H - pad;
+  const availH = botY - topY;
 
   const maxD = Math.max(b.headD, b.nutD, geom.Db_top, geom.Db_bot, b.d);
   const availX = W - 2*pad;
 
+  // Scale to fit height, but allow plates to be wide like Shigley
   const sY = totalH > 0 ? (availH / totalH) : 1;
-  const sX = maxD > 0 ? (0.55*availX / maxD) : 1; // allow wide plates
+  const sX = maxD > 0 ? (0.58*availX / maxD) : 1;
   const s  = Math.min(sX, sY);
 
   const Dpx = D => D*s;
   const Lpx = L => L*s;
 
-  // y positions
   const yHeadTop = topY;
   const yHeadBot = yHeadTop + Lpx(headH);
   const yStackTop = yHeadBot;
@@ -1125,81 +1120,73 @@ function drawJoint(state, geom){
   const yNutTop = yStackBot;
   const yNutBot = yNutTop + Lpx(nutH);
 
-  // --- Plate geometry (full width like Shigley) ---
-  const plateHalfW = Math.max(Dpx(maxD)*1.10, (W - 2*pad)*0.36); // strong “plate” look
+  // ---- Plate width (full member look) ----
+  const plateHalfW = Math.max(Dpx(maxD)*1.15, (W-2*pad)*0.38);
   const holeW = Dpx(geom.dh);
 
-  // --- Bolt geometry ---
-  const shankW = Dpx(b.d)*0.70;             // slimmer than before
+  // ---- Bolt look ----
+  const shankW = Dpx(b.d)*0.62;
   const threadW = shankW*0.92;
+
   const yThreadStart = yStackTop + Lpx(geom.Lsh);
   const yThreadEnd   = yStackBot;
 
-  // --- Draw members as hatched plates ---
-  // Build a list of layers in the grip region (washer layers included so they appear as thin plates)
+  // ---- Draw members (hatched plates) ----
   const layers = [];
-  if(state.geom.useHeadWasher){
-    layers.push({ t: state.geom.tHeadWasher, hatch: false, label: "" , kind:"washer", atTop:true });
-  }
-  state.geom.members.forEach((m,i)=>{
-    layers.push({ t: m.t, hatch: true, hatchDir: (i%2===0? 1:-1), label:"", kind:"member" });
-  });
-  if(state.geom.useNutWasher){
-    layers.push({ t: state.geom.tNutWasher, hatch: false, label:"", kind:"washer", atTop:false });
-  }
+  if(state.geom.useHeadWasher && geom.tHW>0) layers.push({t:state.geom.tHeadWasher, kind:"washer"});
+  state.geom.members.forEach((m,i)=> layers.push({t:m.t, kind:"member", hatchDir:(i%2===0?1:-1)}));
+  if(state.geom.useNutWasher && geom.tNW>0) layers.push({t:state.geom.tNutWasher, kind:"washer"});
 
-  // Draw stack layers (full width rectangles, hatched for members)
   let y = yStackTop;
-  layers.forEach((L, idx)=>{
+  for(const L of layers){
     const h = Lpx(L.t);
-    // Plate outline
+    if(h <= 0) continue;
+
+    // plate body
     ctx.save();
     ctx.fillStyle = (L.kind==="washer") ? "#eef2f7" : "#f7f7f7";
-    ctx.strokeStyle = "#6b7280";
+    ctx.strokeStyle = "#4b5563";
     ctx.lineWidth = 1;
+
     ctx.beginPath();
-    ctx.rect(centerX - plateHalfW, y, 2*plateHalfW, h);
+    ctx.rect(cx - plateHalfW, y, 2*plateHalfW, h);
     ctx.fill();
     ctx.stroke();
 
-    // Hole (clearance)
+    // hole cutout
     ctx.globalCompositeOperation = "destination-out";
-    ctx.fillRect(centerX - holeW/2, y, holeW, h);
+    ctx.fillRect(cx - holeW/2, y, holeW, h);
     ctx.globalCompositeOperation = "source-over";
 
-    // Hatch for members
-    if(L.hatch){
-      hatchRect(ctx,
-        centerX - plateHalfW, y,
-        2*plateHalfW, h,
-        L.hatchDir, 10, "#9ca3af"
-      );
+    // hatch members
+    if(L.kind==="member"){
+      hatchRect(ctx, cx - plateHalfW, y, 2*plateHalfW, h, L.hatchDir, 10, "#9ca3af");
     }
 
     ctx.restore();
-
     y += h;
-  });
+  }
 
-  // --- Draw bolt shank (pink-ish like the book) ---
+  // ---- Draw bolt shank (pink-ish like book) ----
   ctx.save();
-  ctx.fillStyle = "#d6a3a8";        // bolt body tone
+  ctx.fillStyle = "#d6a3a8";
   ctx.strokeStyle = "#7c2d32";
   ctx.lineWidth = 1.25;
 
-  // Shank through entire joint
+  // shank rectangle
   ctx.beginPath();
-  ctx.rect(centerX - shankW/2, yHeadTop + 2, shankW, (yNutBot - yHeadTop) - 4);
+  ctx.rect(cx - shankW/2, yHeadTop + 2, shankW, (yNutBot - yHeadTop) - 4);
   ctx.fill();
   ctx.stroke();
   ctx.restore();
 
-  // --- Threads: sketch diagonal lines in threaded portion ONLY (extends into members like Fig 8-12) ---
+  // ---- Threads ONLY where threaded in grip ----
   ctx.save();
   ctx.strokeStyle = "#7c2d32";
   ctx.lineWidth = 1;
-  const xL = centerX - threadW/2;
-  const xR = centerX + threadW/2;
+
+  const xL = cx - threadW/2;
+  const xR = cx + threadW/2;
   for(let yy=yThreadStart; yy<yThreadEnd; yy+=9){
     ctx.beginPath();
     ctx.moveTo(xL, yy);
@@ -1208,73 +1195,34 @@ function drawJoint(state, geom){
   }
   ctx.restore();
 
-  // --- Head & Nut (hex blocks) ---
+  // ---- Head + Nut blocks ----
   ctx.save();
   ctx.fillStyle = "#c78f95";
   ctx.strokeStyle = "#7c2d32";
   ctx.lineWidth = 1.25;
 
-  // Head
-  drawHexBlock(ctx, centerX, yHeadTop, Dpx(b.headD), Lpx(headH), 10);
-  // Nut
-  drawHexBlock(ctx, centerX, yNutTop,  Dpx(b.nutD),  Lpx(nutH),  10);
+  drawHexBlock(ctx, cx, yHeadTop, Dpx(b.headD), Lpx(headH), 10);
+  drawHexBlock(ctx, cx, yNutTop,  Dpx(b.nutD),  Lpx(nutH),  10);
 
   ctx.restore();
 
-  // --- Washers as thin rings seated under head / above nut (when enabled) ---
+  // ---- Washers as thin rings seated at interfaces ----
   if(state.geom.useHeadWasher){
-    drawRingWasher(ctx, centerX, yStackTop, Dpx(geom.Db_top), holeW, Math.max(3, Lpx(state.geom.tHeadWasher)));
+    drawRingWasher(ctx, cx, yStackTop, Dpx(geom.Db_top), holeW, Math.max(3, Lpx(state.geom.tHeadWasher)));
   } else {
-    // visually suggest bearing face under head
-    drawBearingFace(ctx, centerX, yStackTop, Dpx(b.headD)*0.92, shankW);
+    drawBearingFace(ctx, cx, yStackTop, Dpx(b.headD)*0.92, shankW);
   }
 
   if(state.geom.useNutWasher){
     const yW = yStackBot - Math.max(3, Lpx(state.geom.tNutWasher));
-    drawRingWasher(ctx, centerX, yW, Dpx(geom.Db_bot), holeW, Math.max(3, Lpx(state.geom.tNutWasher)));
+    drawRingWasher(ctx, cx, yW, Dpx(geom.Db_bot), holeW, Math.max(3, Lpx(state.geom.tNutWasher)));
   } else {
-    drawBearingFace(ctx, centerX, yStackBot-2, Dpx(b.nutD)*0.92, shankW);
+    drawBearingFace(ctx, cx, yStackBot-2, Dpx(b.nutD)*0.92, shankW);
   }
 
-  // --- Frustum boundaries (subtle, not huge X’s) ---
-  // In the book, you *infer* the frustum; draw faint 30° boundaries without crossing drama.
-  const ang = (state.geom.frustumAngleDeg||30) * Math.PI/180;
-  const spread = 2*Math.tan(ang); // diameter increase per unit length
-
-  ctx.save();
-  ctx.strokeStyle = "#ef4444";
-  ctx.globalAlpha = 0.55;
-  ctx.lineWidth = 2;
-
-  // from top bearing down
-  const D0t = geom.Db_top;
-  const D1t = D0t + spread*geom.Lg;
-  ctx.beginPath();
-  ctx.moveTo(centerX - Dpx(D0t)/2, yStackTop);
-  ctx.lineTo(centerX - Dpx(D1t)/2, yStackBot);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(centerX + Dpx(D0t)/2, yStackTop);
-  ctx.lineTo(centerX + Dpx(D1t)/2, yStackBot);
-  ctx.stroke();
-
-  // from bottom bearing up
-  const D0b = geom.Db_bot;
-  const D1b = D0b + spread*geom.Lg;
-  ctx.beginPath();
-  ctx.moveTo(centerX - Dpx(D0b)/2, yStackBot);
-  ctx.lineTo(centerX - Dpx(D1b)/2, yStackTop);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(centerX + Dpx(D0b)/2, yStackBot);
-  ctx.lineTo(centerX + Dpx(D1b)/2, yStackTop);
-  ctx.stroke();
-
-  ctx.restore();
-
-  // --- Load arrows P (like Shigley) ---
-  const xA1 = centerX - plateHalfW*0.72;
-  const xA2 = centerX + plateHalfW*0.72;
+  // ---- Load arrows P (like Shigley) ----
+  const xA1 = cx - plateHalfW*0.72;
+  const xA2 = cx + plateHalfW*0.72;
 
   drawArrow(ctx, xA1, yStackTop + 8, xA1, yStackTop - 55, "#111827");
   drawArrow(ctx, xA2, yStackTop + 8, xA2, yStackTop - 55, "#111827");
@@ -1289,34 +1237,23 @@ function drawJoint(state, geom){
   ctx.fillText("P", xA1 - 10, yStackBot + 72);
   ctx.fillText("P", xA2 - 10, yStackBot + 72);
   ctx.restore();
-
-  // --- Caption-like small labels (optional) ---
-  ctx.save();
-  ctx.fillStyle = "#111827";
-  ctx.font = "13px system-ui";
-  ctx.fillText(`Grip Lg = ${fmt(geom.Lg)} ${state.u.L}`, pad, topY - 8);
-  ctx.restore();
 }
 
-// ---- Helpers ----
-
-// hatch inside a rectangle (used for “sectioned plates” look)
+// --- Helpers (add if not present) ---
 function hatchRect(ctx, x, y, w, h, dir=1, step=10, color="#9ca3af"){
   ctx.save();
   ctx.strokeStyle = color;
   ctx.lineWidth = 1;
 
-  // clip to rect
   ctx.beginPath();
   ctx.rect(x,y,w,h);
   ctx.clip();
 
-  // draw diagonal lines
   const diag = Math.sqrt(w*w + h*h);
-  const angle = (dir>=0) ? Math.PI/4 : -Math.PI/4;
+  const ang = (dir>=0) ? Math.PI/4 : -Math.PI/4;
 
   ctx.translate(x + w/2, y + h/2);
-  ctx.rotate(angle);
+  ctx.rotate(ang);
 
   for(let t=-diag; t<=diag; t+=step){
     ctx.beginPath();
@@ -1324,12 +1261,10 @@ function hatchRect(ctx, x, y, w, h, dir=1, step=10, color="#9ca3af"){
     ctx.lineTo(t,  diag);
     ctx.stroke();
   }
-
   ctx.restore();
 }
 
 function drawHexBlock(ctx, cx, yTop, w, h, chamfer=10){
-  // A “hex-ish” block: chamfered rectangle reads like a bolt head/nut in section
   const x = cx - w/2;
   const y = yTop;
   const c = Math.min(chamfer, w*0.18, h*0.35);
@@ -1349,7 +1284,7 @@ function drawHexBlock(ctx, cx, yTop, w, h, chamfer=10){
 function drawRingWasher(ctx, cx, yTop, ODpx, holeWpx, tpx){
   ctx.save();
   ctx.fillStyle = "#e5e7eb";
-  ctx.strokeStyle = "#6b7280";
+  ctx.strokeStyle = "#4b5563";
   ctx.lineWidth = 1;
 
   ctx.beginPath();
@@ -1364,9 +1299,8 @@ function drawRingWasher(ctx, cx, yTop, ODpx, holeWpx, tpx){
 }
 
 function drawBearingFace(ctx, cx, yAt, faceW, holeW){
-  // subtle seat line if no washer
   ctx.save();
-  ctx.strokeStyle = "#6b7280";
+  ctx.strokeStyle = "#4b5563";
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(cx - faceW/2, yAt);
@@ -1377,113 +1311,6 @@ function drawBearingFace(ctx, cx, yAt, faceW, holeW){
   ctx.restore();
 }
 
-
-function drawCenteredRect(ctx, cx, yTop, w, h){
-  ctx.beginPath();
-  ctx.rect(cx - w/2, yTop, w, h);
-  ctx.fill();
-}
-
-function drawHex(ctx, cx, cy, D, H){
-  // simple rounded-rect-ish hex silhouette
-  const w = D, h = H;
-  const x = cx - w/2, y = cy - h/2;
-  const r = Math.min(10, h*0.25);
-  ctx.beginPath();
-  ctx.moveTo(x+r, y);
-  ctx.lineTo(x+w-r, y);
-  ctx.quadraticCurveTo(x+w, y, x+w, y+r);
-  ctx.lineTo(x+w, y+h-r);
-  ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
-  ctx.lineTo(x+r, y+h);
-  ctx.quadraticCurveTo(x, y+h, x, y+h-r);
-  ctx.lineTo(x, y+r);
-  ctx.quadraticCurveTo(x, y, x+r, y);
-  ctx.closePath();
-  ctx.fill();
-
-  // center hole
-  ctx.save();
-  ctx.fillStyle = "#6b7280";
-  ctx.beginPath();
-  ctx.arc(cx, cy, Math.min(w,h)*0.18, 0, Math.PI*2);
-  ctx.fill();
-  ctx.restore();
-}
-
-function drawWasher(ctx, cx, yTop, OD, holeD, s, isTop){
-  // a simple washer plate located at yTop (top washer sits at stack top)
-  ctx.save();
-  ctx.fillStyle = "#e5e7eb";
-  ctx.strokeStyle = "#9ca3af";
-  ctx.lineWidth = 1.5;
-
-  const w = OD*s;
-  const t = 0.06*s; // visual only; actual thickness is drawn in layer blocks
-  const y = yTop + (isTop?0:0);
-
-  ctx.beginPath();
-  ctx.rect(cx - w/2, y, w, t);
-  ctx.fill();
-  ctx.stroke();
-
-  // hole
-  ctx.globalCompositeOperation = "destination-out";
-  ctx.beginPath();
-  ctx.arc(cx, y+t/2, (holeD*s)/2, 0, Math.PI*2);
-  ctx.fill();
-  ctx.globalCompositeOperation = "source-over";
-
-  ctx.restore();
-}
-
-function drawLayer(ctx, cx, yTop, t, ODref, holeD, s, label){
-  if(!t || t<=0) return;
-  const h = t*s;
-  const w = ODref*s * 1.05;
-  ctx.save();
-  ctx.fillStyle = "#f3f4f6";
-  ctx.strokeStyle = "#9ca3af";
-  ctx.lineWidth = 1.2;
-  ctx.beginPath();
-  ctx.rect(cx - w/2, yTop, w, h);
-  ctx.fill();
-  ctx.stroke();
-
-  // hole cutout
-  ctx.globalCompositeOperation = "destination-out";
-  ctx.beginPath();
-  ctx.rect(cx - (holeD*s)/2, yTop, (holeD*s), h);
-  ctx.fill();
-  ctx.globalCompositeOperation = "source-over";
-
-  // label
-  ctx.fillStyle = "#111827";
-  ctx.font = "12px system-ui";
-  ctx.fillText(label, cx + w/2 + 10, yTop + Math.min(14, h-2));
-  ctx.restore();
-}
-
-function drawArrow(ctx, x1,y1,x2,y2,color){
-  ctx.save();
-  ctx.strokeStyle = color;
-  ctx.fillStyle = color;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x1,y1);
-  ctx.lineTo(x2,y2);
-  ctx.stroke();
-
-  const ang = Math.atan2(y2-y1, x2-x1);
-  const head = 10;
-  ctx.beginPath();
-  ctx.moveTo(x2,y2);
-  ctx.lineTo(x2 - head*Math.cos(ang - Math.PI/6), y2 - head*Math.sin(ang - Math.PI/6));
-  ctx.lineTo(x2 - head*Math.cos(ang + Math.PI/6), y2 - head*Math.sin(ang + Math.PI/6));
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
-}
 
 /* ============================================================
    Event wiring
@@ -1496,7 +1323,7 @@ function recalcAndDraw(runSolve){
   if(geom) drawJoint(state, geom);
 
   // Update debug quickly
-  $("debugOut").textContent = JSON.stringify({state, derived:{geom}}, null, 2);
+//  $("debugOut").textContent = JSON.stringify({state, derived:{geom}}, null, 2);
 
   // If requested, run stub solve
   if(runSolve) runSolveStub();
@@ -1723,7 +1550,7 @@ function runSizeScan(){
     state.bolt.data = list[list.length-1];
     state.loads.holeDiaOverride = holeOverride;
     const ev = evaluateCurrentBolt(state);
-    $("debugOut").textContent = JSON.stringify({
+  //  $("debugOut").textContent = JSON.stringify({
       message:"No passing size found in current table range.",
       lastTried:list[list.length-1]?.label,
       lastEval:ev
@@ -1744,6 +1571,7 @@ function runSizeScan(){
 </script>
 </body>
 </html>
+
 
 
 
