@@ -200,85 +200,87 @@
     <div class="card">
       <h2>Loads & Tightening Scatter</h2>
 
-  <div class="row3">
-  <div>
-    <label>External Load P</label>
-    <input id="Pext" type="number" step="any" value="2000" />
-  </div>
-  <div>
-    <label>Target Torque T</label>
-    <input id="Ttarget" type="number" step="any" value="120" />
-  </div>
-  <div>
-    <label>Torque Applied At</label>
-    <select id="torqueAt">
-      <option value="nut" selected>Nut</option>
-      <option value="head">Head</option>
-    </select>
-  </div>
-</div>
-
-<div class="row3">
-  <div>
-    <label>Torque Tolerance (±%)</label>
-    <input id="Ttol" type="number" step="any" value="10" />
-  </div>
-  <div>
-    <label>μ_thread (min)</label>
-    <input id="muTmin" type="number" step="any" value="0.12" />
-  </div>
-  <div>
-    <label>μ_thread (max)</label>
-    <input id="muTmax" type="number" step="any" value="0.20" />
-  </div>
-</div>
+      <div class="row3">
+        <div>
+          <label>External Load P</label>
+          <input id="Pext" type="number" step="any" value="2000" />
+        </div>
+        <div>
+          <label>Target Torque T</label>
+          <input id="Ttarget" type="number" step="any" value="120" />
+        </div>
+        <div>
+          <label>Torque Applied At</label>
+          <select id="torqueAt">
+            <option value="nut" selected>Nut</option>
+            <option value="head">Head</option>
+          </select>
+        </div>
+      </div>
 
       <div class="row3">
-    
+        <div>
+          <label>Torque Tolerance (±%)</label>
+          <input id="Ttol" type="number" step="any" value="10" />
+        </div>
+        <div>
+          <label>μ_thread (min)</label>
+          <input id="muTmin" type="number" step="any" value="0.12" />
+        </div>
+        <div>
+          <label>μ_thread (max)</label>
+          <input id="muTmax" type="number" step="any" value="0.20" />
+        </div>
+      </div>
+
+      <div class="row3">
         <div>
           <label>μ_bearing (min)</label>
           <input id="muBmin" type="number" step="any" value="0.12" />
         </div>
+        <div></div><div></div>
       </div>
+
+      <!-- FIXED: properly closed row3 before starting next row3 -->
       <div class="row3">
         <div>
           <label>μ_bearing (max)</label>
           <input id="muBmax" type="number" step="any" value="0.20" />
         </div>
+        <div></div><div></div>
+      </div>
 
-<div class="row3">
-  <div>
-    <label>Hole Fit</label>
-    <select id="holeFit">
-      <option value="normal" selected>Normal (standard)</option>
-      <option value="close">Close</option>
-      <option value="loose">Loose</option>
-      <option value="custom">Custom (override)</option>
-    </select>
-  </div>
-  <div>
-    <label>Clearance Hole Dia (override)</label>
-    <input id="holeDia" type="number" step="any" placeholder="used only if Hole Fit = Custom" />
-  </div>
-  <div>
-    <label>Proof Utilization Limit</label>
-    <input id="proofLimit" type="number" step="any" value="1.00" />
-  </div>
-</div>
+      <div class="row3">
+        <div>
+          <label>Hole Fit</label>
+          <select id="holeFit">
+            <option value="normal" selected>Normal (standard)</option>
+            <option value="close">Close</option>
+            <option value="loose">Loose</option>
+            <option value="custom">Custom (override)</option>
+          </select>
+        </div>
+        <div>
+          <label>Clearance Hole Dia (override)</label>
+          <input id="holeDia" type="number" step="any" placeholder="used only if Hole Fit = Custom" />
+        </div>
+        <div>
+          <label>Proof Utilization Limit</label>
+          <input id="proofLimit" type="number" step="any" value="1.00" />
+        </div>
+      </div>
 
-
-<div class="btnbar" style="margin-top:10px;">
-  <button class="primary" id="btnScan">Minimum Size Scan</button>
-  <button id="btnSolve">Solve / Check Current Size</button>
-  <button id="btnRedraw">Redraw Only</button>
-  <button id="btnReset">Reset Defaults</button>
-</div>
+      <div class="btnbar" style="margin-top:10px;">
+        <button class="primary" id="btnScan">Minimum Size Scan</button>
+        <button id="btnSolve">Solve / Check Current Size</button>
+        <button id="btnRedraw">Redraw Only</button>
+        <button id="btnReset">Reset Defaults</button>
+      </div>
 
       <div class="small muted" style="margin-top:6px;">
         Current solver computes geometry, stiffnesses, load fractions, and draws scaled joint immediately.
       </div>
     </div>
-
   </div>
 
   <!-- RIGHT PANEL -->
@@ -359,45 +361,34 @@ const GRADES = {
 };
 
 // Bolt size tables (placeholders, minimal set)
-// Each entry must include: d, pitch, At, d2, headD, headH, nutD, nutH, defaultHole, and thread labels.
 const BOLTS = {
-  // Imperial: use nominal diameter in inches
   sae_j429: {
     coarse: [
-      // 1/4-20
-      { label:"1/4-20", d:0.250, tpi:20, pitch:1/20, At:0.0318, d2:0.217, headD:0.438, headH:0.163, nutD:0.438, nutH:0.219, hole:0.281 },
-      // 5/16-18
+      { label:"1/4-20",  d:0.250,  tpi:20, pitch:1/20, At:0.0318, d2:0.217, headD:0.438, headH:0.163, nutD:0.438, nutH:0.219, hole:0.281 },
       { label:"5/16-18", d:0.3125, tpi:18, pitch:1/18, At:0.0524, d2:0.269, headD:0.531, headH:0.203, nutD:0.500, nutH:0.266, hole:0.344 },
-      // 3/8-16
-      { label:"3/8-16", d:0.375, tpi:16, pitch:1/16, At:0.0775, d2:0.324, headD:0.656, headH:0.244, nutD:0.562, nutH:0.328, hole:0.406 },
-      // 1/2-13
-      { label:"1/2-13", d:0.500, tpi:13, pitch:1/13, At:0.1419, d2:0.450, headD:0.875, headH:0.326, nutD:0.750, nutH:0.437, hole:0.531 },
-      // 5/8-11
-      { label:"5/8-11", d:0.625, tpi:11, pitch:1/11, At:0.2260, d2:0.566, headD:1.062, headH:0.408, nutD:0.938, nutH:0.547, hole:0.656 }
+      { label:"3/8-16",  d:0.375,  tpi:16, pitch:1/16, At:0.0775, d2:0.324, headD:0.656, headH:0.244, nutD:0.562, nutH:0.328, hole:0.406 },
+      { label:"1/2-13",  d:0.500,  tpi:13, pitch:1/13, At:0.1419, d2:0.450, headD:0.875, headH:0.326, nutD:0.750, nutH:0.437, hole:0.531 },
+      { label:"5/8-11",  d:0.625,  tpi:11, pitch:1/11, At:0.2260, d2:0.566, headD:1.062, headH:0.408, nutD:0.938, nutH:0.547, hole:0.656 }
     ],
     fine: [
-      { label:"1/4-28", d:0.250, tpi:28, pitch:1/28, At:0.0364, d2:0.227, headD:0.438, headH:0.163, nutD:0.438, nutH:0.219, hole:0.281 },
+      { label:"1/4-28",  d:0.250,  tpi:28, pitch:1/28, At:0.0364, d2:0.227, headD:0.438, headH:0.163, nutD:0.438, nutH:0.219, hole:0.281 },
       { label:"5/16-24", d:0.3125, tpi:24, pitch:1/24, At:0.0580, d2:0.283, headD:0.531, headH:0.203, nutD:0.500, nutH:0.266, hole:0.344 },
-      { label:"3/8-24", d:0.375, tpi:24, pitch:1/24, At:0.0878, d2:0.334, headD:0.656, headH:0.244, nutD:0.562, nutH:0.328, hole:0.406 },
-      { label:"1/2-20", d:0.500, tpi:20, pitch:1/20, At:0.1599, d2:0.459, headD:0.875, headH:0.326, nutD:0.750, nutH:0.437, hole:0.531 }
+      { label:"3/8-24",  d:0.375,  tpi:24, pitch:1/24, At:0.0878, d2:0.334, headD:0.656, headH:0.244, nutD:0.562, nutH:0.328, hole:0.406 },
+      { label:"1/2-20",  d:0.500,  tpi:20, pitch:1/20, At:0.1599, d2:0.459, headD:0.875, headH:0.326, nutD:0.750, nutH:0.437, hole:0.531 }
     ]
   },
-  astm: { // reuse same geometry table for now
-    coarse: [], fine: []
-  },
-
-  // Metric: use nominal diameter in mm, pitch in mm
+  astm: { coarse: [], fine: [] },
   iso_metric: {
     coarse: [
-      { label:"M6×1.0",  d:6,  pitch:1.0, At:20.1, d2:5.35, headD:10, headH:4, nutD:10, nutH:5, hole:6.6 },
-      { label:"M8×1.25", d:8,  pitch:1.25, At:36.6, d2:7.19, headD:13, headH:5.3, nutD:13, nutH:6.5, hole:9.0 },
-      { label:"M10×1.5", d:10, pitch:1.5, At:58.0, d2:9.03, headD:16, headH:6.4, nutD:17, nutH:8, hole:11.0 },
-      { label:"M12×1.75",d:12, pitch:1.75, At:84.3, d2:10.86, headD:18, headH:7.5, nutD:19, nutH:10, hole:13.0 }
+      { label:"M6×1.0",   d:6,  pitch:1.0,  At:20.1, d2:5.35, headD:10, headH:4,   nutD:10, nutH:5,  hole:6.6 },
+      { label:"M8×1.25",  d:8,  pitch:1.25, At:36.6, d2:7.19, headD:13, headH:5.3, nutD:13, nutH:6.5,hole:9.0 },
+      { label:"M10×1.5",  d:10, pitch:1.5,  At:58.0, d2:9.03, headD:16, headH:6.4, nutD:17, nutH:8,  hole:11.0 },
+      { label:"M12×1.75", d:12, pitch:1.75, At:84.3, d2:10.86,headD:18, headH:7.5, nutD:19, nutH:10, hole:13.0 }
     ],
     fine: [
-      { label:"M8×1.0",  d:8,  pitch:1.0, At:39.2, d2:7.35, headD:13, headH:5.3, nutD:13, nutH:6.5, hole:9.0 },
-      { label:"M10×1.25",d:10, pitch:1.25, At:61.2, d2:9.20, headD:16, headH:6.4, nutD:17, nutH:8, hole:11.0 },
-      { label:"M12×1.5", d:12, pitch:1.5, At:92.1, d2:11.04, headD:18, headH:7.5, nutD:19, nutH:10, hole:13.0 }
+      { label:"M8×1.0",   d:8,  pitch:1.0,  At:39.2, d2:7.35, headD:13, headH:5.3, nutD:13, nutH:6.5, hole:9.0 },
+      { label:"M10×1.25", d:10, pitch:1.25, At:61.2, d2:9.20, headD:16, headH:6.4, nutD:17, nutH:8,   hole:11.0 },
+      { label:"M12×1.5",  d:12, pitch:1.5,  At:92.1, d2:11.04,headD:18, headH:7.5, nutD:19, nutH:10,  hole:13.0 }
     ]
   }
 };
@@ -411,8 +402,7 @@ BOLTS.astm.fine   = JSON.parse(JSON.stringify(BOLTS.sae_j429.fine));
    ============================================================ */
 const $ = id => document.getElementById(id);
 
-// Torque-per-preload factor g(mu_t, mu_b) for thread + bearing (same model you used)
-// T = F * g(...)
+// Torque-per-preload factor g(mu_t, mu_b) for thread + bearing
 function gThreadBearing(bolt, Db_eff, mu_t, mu_b){
   if(!bolt || !(Db_eff>0)) return null;
 
@@ -420,7 +410,7 @@ function gThreadBearing(bolt, Db_eff, mu_t, mu_b){
   const pitch = bolt.pitch;
   if(!(d2>0) || !(pitch>0)) return null;
 
-  const alpha = 30 * Math.PI/180; // half-angle for 60° thread
+  const alpha = 30 * Math.PI/180;
   const secA  = 1/Math.cos(alpha);
 
   const lambda = Math.atan( pitch / (Math.PI*d2) );
@@ -440,7 +430,6 @@ function torqueBandForState(state, geom){
   const b = state.bolt.data;
   if(!b || !geom) return { feasible:false, reason:"No bolt/geom" };
 
-  // stiffness split
   const kbOut = calcBoltStiffness(state, geom);
   const kmOut = calcMemberStiffnessShigley(state, geom);
   const C = (kbOut.kb + kmOut.km) > 0 ? kbOut.kb/(kbOut.kb + kmOut.km) : null;
@@ -448,53 +437,37 @@ function torqueBandForState(state, geom){
 
   const P = state.loads.P;
 
-  // Separation requirement
-  const Fi_req = (1 - C) * P; // you can multiply by a margin factor later if desired
+  const Fi_req = (1 - C) * P;
 
-  // Proof constraint gives allowable max preload
   const Fproof = calcProofLoad(state);
   if(!(Fproof>0)) return { feasible:false, reason:"No proof load" };
 
   const Fi_max_allow = state.loads.proofLimit * Fproof - C * P;
   if(!(Fi_max_allow>0)) return { feasible:false, reason:"No allowable preload" };
 
-  // Effective bearing friction diameter (depends on where torque is applied)
   const D_outer = (state.loads.torqueAt === "head") ? geom.Db_top : geom.Db_bot;
   const D_inner = geom.dh;
   const Db_eff  = 0.5*(D_outer + D_inner);
 
-  // Worst cases for torque window
-  const tol = state.loads.TtolPct;          // ± as fraction
+  const tol = state.loads.TtolPct;
   const muT_hi = state.loads.muTmax;
   const muB_hi = state.loads.muBmax;
   const muT_lo = state.loads.muTmin;
   const muB_lo = state.loads.muBmin;
 
-  const g_hi = gThreadBearing(b, Db_eff, muT_hi, muB_hi); // high friction => big g
-  const g_lo = gThreadBearing(b, Db_eff, muT_lo, muB_lo); // low friction  => small g
+  const g_hi = gThreadBearing(b, Db_eff, muT_hi, muB_hi);
+  const g_lo = gThreadBearing(b, Db_eff, muT_lo, muB_lo);
 
   if(!(g_hi>0) || !(g_lo>0)) return { feasible:false, reason:"Bad g()" };
 
-  // Guarantee min preload under Tmin = T*(1-tol) with high friction:
-  // Fi_min = Tmin / g_hi >= Fi_req  => T >= Fi_req * g_hi / (1 - tol)
-  const TminReq = Fi_req * g_hi / Math.max(1e-12, (1 - tol));
-
-  // Guarantee max preload under Tmax = T*(1+tol) with low friction:
-  // Fi_max = Tmax / g_lo <= Fi_max_allow => T <= Fi_max_allow * g_lo / (1 + tol)
+  const TminReq   = Fi_req       * g_hi / Math.max(1e-12, (1 - tol));
   const TmaxAllow = Fi_max_allow * g_lo / (1 + tol);
 
   const feasible = (TminReq <= TmaxAllow);
-
   const Tset = feasible ? 0.5*(TminReq + TmaxAllow) : null;
 
-  return {
-    feasible,
-    reason: feasible ? "OK" : "No feasible torque band",
-    C, Fi_req, Fi_max_allow, Fproof,
-    Db_eff, TminReq, TmaxAllow, Tset
-  };
+  return { feasible, reason: feasible ? "OK" : "No feasible torque band", C, Fi_req, Fi_max_allow, Fproof, Db_eff, TminReq, TmaxAllow, Tset };
 }
-
 
 function fmt(x, digits=4){
   if (x === null || x === undefined || Number.isNaN(x)) return "—";
@@ -507,7 +480,6 @@ function unitLabel(isImp){
   return isImp ? {L:"in", F:"lbf", T:"lbf·in", E:"psi"} : {L:"mm", F:"N", T:"N·mm", E:"MPa"};
 }
 
-// Convert material modulus to current units
 function materialE(matKey, isImp){
   const m = MATERIALS.find(x => x.key === matKey);
   if(!m) return null;
@@ -561,9 +533,8 @@ function buildMemberRows(){
 
     const sel = $("m_mat_"+i);
     buildMaterialsSelect(sel);
-    sel.value = (i===1 ? "steel" : "steel");
+    sel.value = "steel";
 
-    // React to material selection
     sel.addEventListener("change", ()=>{
       updateMemberHelp(i);
       recalcAndDraw(false);
@@ -630,7 +601,6 @@ function rebuildSizeOptions(){
 
 function updateBoltEDefault(){
   const isImp = $("isImperial").checked;
-  // default bolt E to steel-ish
   $("boltE").value = isImp ? 30e6 : 200000;
 }
 
@@ -643,13 +613,12 @@ function readState(){
   const family = $("boltFamily").value;
   const series = $("threadSeries").value;
   const gradeKey = $("boltGrade").value;
-holeFit: $("holeFit").value, // close|normal|loose|custom
+
   const sizeIdx = Number($("boltSize").value || 0);
   const bolt = (BOLTS[family] && BOLTS[family][series]) ? BOLTS[family][series][sizeIdx] : null;
   const grade = (GRADES[family] || []).find(g=>g.key===gradeKey) || null;
 
   const nMembers = Number($("numMembers").value);
-
   const members = [];
   for(let i=1;i<=nMembers;i++){
     const t = Number($("m_t_"+i).value || 0);
@@ -658,7 +627,7 @@ holeFit: $("holeFit").value, // close|normal|loose|custom
     members.push({ t, matKey, extra });
   }
 
-  const state = {
+  return {
     units: isImp ? "imperial" : "metric",
     u,
     bolt: {
@@ -683,51 +652,43 @@ holeFit: $("holeFit").value, // close|normal|loose|custom
       members,
       Lshank: Number($("Lshank").value || 0)
     },
-loads: {
-  P: Number($("Pext").value || 0),
-  T: Number($("Ttarget").value || 0),
-  torqueAt: $("torqueAt").value, // "nut" | "head"
-  TtolPct: Number($("Ttol").value || 0) / 100,
-  muTmin: Number($("muTmin").value || 0),
-  muTmax: Number($("muTmax").value || 0),
-  muBmin: Number($("muBmin").value || 0),
-  muBmax: Number($("muBmax").value || 0),
-  holeDiaOverride: $("holeDia").value.trim()==="" ? null : Number($("holeDia").value),
-  proofLimit: Number($("proofLimit").value || 1.0)
-}
+    loads: {
+      P: Number($("Pext").value || 0),
+      T: Number($("Ttarget").value || 0),
+      torqueAt: $("torqueAt").value,
+      TtolPct: Number($("Ttol").value || 0) / 100,
+      muTmin: Number($("muTmin").value || 0),
+      muTmax: Number($("muTmax").value || 0),
+      muBmin: Number($("muBmin").value || 0),
+      muBmax: Number($("muBmax").value || 0),
 
+      // FIXED: properly captured
+      holeFit: $("holeFit").value,
+
+      holeDiaOverride: $("holeDia").value.trim()==="" ? null : Number($("holeDia").value),
+      proofLimit: Number($("proofLimit").value || 1.0)
+    }
   };
-  return state;
 }
 
 /* ============================================================
-   Derived geometry & placeholders for stiffness/torque mapping
+   Derived geometry & stiffness
    ============================================================ */
 function deriveGeometry(state){
-  const isImp = state.units === "imperial";
   const b = state.bolt.data;
   if(!b) return null;
 
-  // Grip thickness: washers (if used) + members
   const tHW = state.geom.useHeadWasher ? state.geom.tHeadWasher : 0;
   const tNW = state.geom.useNutWasher  ? state.geom.tNutWasher  : 0;
   const tMembers = state.geom.members.reduce((s,m)=>s + (m.t||0), 0);
-  const Lg = tHW + tMembers + tNW; // grip length
+  const Lg = tHW + tMembers + tNW;
 
-  // Bearing diameter top/bottom:
-  // - if washer used => washer OD
-  // - else => headD / nutD from bolt table
   const Db_top = state.geom.useHeadWasher ? state.geom.odHeadWasher : b.headD;
   const Db_bot = state.geom.useNutWasher  ? state.geom.odNutWasher  : b.nutD;
 
-  // Hole diameter default
- // const dh = (state.loads.holeDiaOverride !== null) ? state.loads.holeDiaOverride : b.hole;
-
-  // Hole diameter logic
   let dh;
   if (state.loads.holeFit === "custom") {
-    dh = (state.loads.holeDiaOverride !== null) ? state.loads.holeDiaOverride
-                                               : (b.holeNormal ?? b.hole);
+    dh = (state.loads.holeDiaOverride !== null) ? state.loads.holeDiaOverride : (b.holeNormal ?? b.hole);
   } else if (state.loads.holeFit === "close") {
     dh = b.holeClose ?? b.holeNormal ?? b.hole;
   } else if (state.loads.holeFit === "loose") {
@@ -736,107 +697,33 @@ function deriveGeometry(state){
     dh = b.holeNormal ?? b.hole;
   }
 
-  // Shank and thread lengths within grip
   const Lsh = clamp(state.geom.Lshank, 0, Lg);
   const Lth = Math.max(0, Lg - Lsh);
 
-  return {
-    Lg, tHW, tNW, tMembers,
-    Db_top, Db_bot,
-    dh,
-    Lsh, Lth
-  };
+  return { Lg, tHW, tNW, tMembers, Db_top, Db_bot, dh, Lsh, Lth };
 }
 
-// Placeholder bolt stiffness kb (series spring of shank + threaded part)
 function calcBoltStiffness(state, geom){
   const b = state.bolt.data;
   const E = state.bolt.E;
   if(!b || !geom) return null;
 
-  // Areas
   const d = b.d;
   const A_shank = Math.PI * d*d / 4;
   const At = b.At;
 
-  // Compliance = L/(A E)
   const comp = (geom.Lsh)/(A_shank*E) + (geom.Lth)/(At*E);
   const kb = comp > 0 ? 1/comp : Infinity;
   return { kb, A_shank, At };
 }
 
-// Member stiffness placeholder (you will replace with Shigley frustum compliance sum)
-// For now, use a crude axial bar equivalent using bearing area and total thickness as demo.
-// Also supports direct k for gasket/o-ring layers in series.
-function calcMemberStiffnessPlaceholder(state, geom){
-  const isImp = state.units === "imperial";
-  const ang = (state.geom.frustumAngleDeg || 30) * Math.PI/180;
-
-  // Choose an "effective area" based on average bearing diameter between top/bottom
-  const Db_eff = 0.5*(geom.Db_top + geom.Db_bot);
-  const A_eff = Math.PI * (Db_eff*Db_eff - geom.dh*geom.dh) / 4;
-
-  // Series compliance
-  let comp = 0;
-
-  // Head washer as a layer if used
-  if(state.geom.useHeadWasher){
-    comp += layerCompliance(state.geom.tHeadWasher, state.geom.matHeadWasher, null, A_eff, isImp);
-  }
-  // Members
-  for(const m of state.geom.members){
-    comp += layerCompliance(m.t, m.matKey, m.extra, A_eff, isImp);
-  }
-  // Nut washer if used
-  if(state.geom.useNutWasher){
-    comp += layerCompliance(state.geom.tNutWasher, state.geom.matNutWasher, null, A_eff, isImp);
-  }
-
-  const km = comp > 0 ? 1/comp : Infinity;
-
-  // Provide some placeholders for frustum exit diameters just for drawing annotations later
-  const spreadPerThickness = 2*Math.tan(ang);
-  const approxDbAtMid = Db_eff + spreadPerThickness*(geom.Lg/2);
-
-  return { km, A_eff, Db_eff, approxDbAtMid };
-}
-
-function layerCompliance(t, matKey, extra, A_eff, isImp){
-  if(!t || t<=0) return 0;
-  const mat = MATERIALS.find(x=>x.key===matKey);
-  if(!mat) return 0;
-
-  // Direct k spring layers:
-  if(mat.needsK){
-    const k = (extra!==null && isFinite(extra) && extra>0) ? extra : null;
-    // if no k, treat as very soft but finite
-    return k ? (1/k) : 1e6;
-  }
-
-  // Modulus layers:
-  let E = null;
-  if(mat.needsE){
-    E = (extra!==null && isFinite(extra) && extra>0) ? extra : null;
-  } else {
-    E = materialE(matKey, isImp);
-  }
-  if(!E || !isFinite(E) || E<=0) return 0;
-  return t/(A_eff*E);
-}
-
-// ============================================================
-// Shigley 30° frustum member stiffness (layered, two-sided)
-// Model: two frusta, each spanning half the grip length (Lg/2)
-// Total compliance = comp_top + comp_bot  => km = 1 / compliance
-// ============================================================
+// ---- Shigley 30° frustum member stiffness (layered, two-sided) ----
 function calcMemberStiffnessShigley(state, geom){
   const isImp = state.units === "imperial";
   const alpha = (state.geom.frustumAngleDeg || 30) * Math.PI/180;
   const tanA  = Math.tan(alpha);
   const dh    = geom.dh;
 
-  // Build full stack of layers through the grip, in order top->bottom
-  // Include washer layers only if used (these affect stiffness + drawing)
   const layers = [];
   if(state.geom.useHeadWasher && geom.tHW > 0){
     layers.push(makeLayer(state.geom.tHeadWasher, state.geom.matHeadWasher, null, isImp, "Head washer"));
@@ -851,39 +738,26 @@ function calcMemberStiffnessShigley(state, geom){
   const Lg = geom.Lg;
   const half = 0.5*Lg;
 
-  // compliance top half: start at Db_top, go downward to mid-plane
   const topRes = complianceHalf_FromTop(layers, half, geom.Db_top, dh, tanA);
-
-  // compliance bottom half: start at Db_bot, go upward to mid-plane
   const botRes = complianceHalf_FromBottom(layers, half, geom.Db_bot, dh, tanA);
 
   const comp = topRes.comp + botRes.comp;
   const km = comp > 0 ? 1/comp : Infinity;
 
-  return {
-    km,
-    compliance: comp,
-    comp_top: topRes.comp,
-    comp_bot: botRes.comp,
-    Dmid_top: topRes.Dend,
-    Dmid_bot: botRes.Dend
-  };
+  return { km, compliance: comp, comp_top: topRes.comp, comp_bot: botRes.comp, Dmid_top: topRes.Dend, Dmid_bot: botRes.Dend };
 }
 
 function makeLayer(t, matKey, extra, isImp, name){
   const mat = MATERIALS.find(x=>x.key===matKey) || {};
   const layer = { name, t: Number(t||0), matKey, kind: "E", E: null, k: null };
-
   if(layer.t <= 0) return layer;
 
-  // Spring layers (gasket / o-ring)
   if(mat.needsK){
     layer.kind = "k";
     layer.k = (extra!==null && isFinite(extra) && extra>0) ? Number(extra) : null;
     return layer;
   }
 
-  // Modulus layers
   layer.kind = "E";
   if(mat.needsE){
     layer.E = (extra!==null && isFinite(extra) && extra>0) ? Number(extra) : null;
@@ -893,7 +767,6 @@ function makeLayer(t, matKey, extra, isImp, name){
   return layer;
 }
 
-// Traverse top->bottom until reaching depth "half"
 function complianceHalf_FromTop(layers, half, Db, dh, tanA){
   let depth = 0;
   let comp = 0;
@@ -903,10 +776,8 @@ function complianceHalf_FromTop(layers, half, Db, dh, tanA){
     const t = L.t || 0;
     if(t <= 0) continue;
 
-    const seg = Math.min(t, half - depth); // segment thickness within top half
-
+    const seg = Math.min(t, half - depth);
     if(L.kind === "k"){
-      // If k provided for full layer thickness, compliance scales linearly with length fraction
       const kFull = L.k;
       comp += (kFull && kFull>0) ? (seg/t)*(1/kFull) : 1e6*(seg/t);
     } else {
@@ -919,16 +790,13 @@ function complianceHalf_FromTop(layers, half, Db, dh, tanA){
         comp += frustumCompliance(E, dh, D0, D1, tanA);
       }
     }
-
     depth += seg;
   }
 
-  // Diameter at the end of this half-depth (for debug)
   const Dend = Db + 2*half*tanA;
   return { comp, Dend };
 }
 
-// Traverse bottom->top until reaching depth "half"
 function complianceHalf_FromBottom(layers, half, Db, dh, tanA){
   let depth = 0;
   let comp = 0;
@@ -940,7 +808,6 @@ function complianceHalf_FromBottom(layers, half, Db, dh, tanA){
     if(t <= 0) continue;
 
     const seg = Math.min(t, half - depth);
-
     if(L.kind === "k"){
       const kFull = L.k;
       comp += (kFull && kFull>0) ? (seg/t)*(1/kFull) : 1e6*(seg/t);
@@ -954,7 +821,6 @@ function complianceHalf_FromBottom(layers, half, Db, dh, tanA){
         comp += frustumCompliance(E, dh, D0, D1, tanA);
       }
     }
-
     depth += seg;
   }
 
@@ -962,38 +828,18 @@ function complianceHalf_FromBottom(layers, half, Db, dh, tanA){
   return { comp, Dend };
 }
 
-/**
- * Frustum compliance for a conical pressure field through thickness segment.
- *
- * Assumptions:
- * - Axial strain: dδ = F dx / (E A(x))
- * - A(x) = (π/4) (D(x)^2 - dh^2)
- * - D(x) varies linearly from D0 to D1 due to cone angle α:
- *     D(x) = Db + 2 x tan(α)  => for a segment we just pass endpoints D0, D1
- *
- * Result:
- * δ/F = 1 / (E π dh tanα) * ln( [(D1 - dh)/(D1 + dh)] / [(D0 - dh)/(D0 + dh)] )
- *
- * Special case dh→0: use limit integral:
- * δ/F = (2 / (E π tanα)) * (1/D0 - 1/D1)
- */
 function frustumCompliance(E, dh, D0, D1, tanA){
-  // guard
   if(!(E>0) || !(tanA>0) || !(D0>0) || !(D1>0)) return 0;
 
-  // Ensure D1 >= D0 for formula stability; if reversed, swap
   let a0 = D0, a1 = D1;
   if(a1 < a0){ const tmp=a0; a0=a1; a1=tmp; }
 
   const eps = 1e-12;
   if(dh <= eps){
-    // dh -> 0 limit
     return (2/(E*Math.PI*tanA)) * ( (1/a0) - (1/a1) );
   }
 
-  // Prevent singularity when D approaches dh
   const safe = (D)=> Math.max(D, dh + 1e-9);
-
   const D0s = safe(a0);
   const D1s = safe(a1);
 
@@ -1001,103 +847,64 @@ function frustumCompliance(E, dh, D0, D1, tanA){
   return (1/(E*Math.PI*dh*tanA)) * term;
 }
 
-
-// Torque->preload mapping placeholder
-// Replace later with thread+bearing torque physics.
-// For now, use K-factor approximation derived from μ ranges:
-// K ≈ 0.2 baseline, scaled by (μt+μb)
-
-
-// ============================================================
 // Real torque -> preload mapping (thread + bearing)
-// T = F * [ (d2/2)*tan(lambda + phi) + mu_b*(Db/2) ]
-// where lambda = atan(lead/(pi*d2)), phi = atan(mu_t*sec(alpha))
-// alpha = 30 deg for 60° threads (UN/Metric)
-// Db = effective bearing friction diameter ~ (D_outer + D_inner)/2
-// Assumes torque applied at the NUT (bearing under nut/washer).
-// ============================================================
-
 function calcPreloadBoundsThreadBearing(state, geom){
   const b = state.bolt.data;
   if(!b) return null;
 
   const T = state.loads.T;
   const tol = state.loads.TtolPct;
-
   const Tmin = T*(1 - tol);
   const Tmax = T*(1 + tol);
 
-  // Effective bearing friction diameter at NUT side:
-  // Outer = bearing diameter at bottom (washer OD if used, else nut bearing dia)
-  // Inner = clearance hole diameter
-const D_outer = (state.loads.torqueAt === "head") ? geom.Db_top : geom.Db_bot;
-const D_inner = geom.dh;
-const Db_eff  = 0.5*(D_outer + D_inner);
+  const D_outer = (state.loads.torqueAt === "head") ? geom.Db_top : geom.Db_bot;
+  const D_inner = geom.dh;
+  const Db_eff  = 0.5*(D_outer + D_inner);
 
-  // Worst-case mapping:
-  // Fi,min => low torque + high friction
-  const Fmin = torqueToPreloadThreadBearing(
-    Tmin, b, Db_eff,
-    state.loads.muTmax, state.loads.muBmax
-  );
-
-  // Fi,max => high torque + low friction
-  const Fmax = torqueToPreloadThreadBearing(
-    Tmax, b, Db_eff,
-    state.loads.muTmin, state.loads.muBmin
-  );
+  const Fmin = torqueToPreloadThreadBearing(Tmin, b, Db_eff, state.loads.muTmax, state.loads.muBmax);
+  const Fmax = torqueToPreloadThreadBearing(Tmax, b, Db_eff, state.loads.muTmin, state.loads.muBmin);
 
   return { Tmin, Tmax, Db_eff, Fmin, Fmax };
 }
 
 function torqueToPreloadThreadBearing(T, bolt, Db_eff, mu_t, mu_b){
-  // Guard
   if(!(T>=0) || !bolt) return null;
 
-  // Thread geometry
-  const d2 = bolt.d2;         // pitch diameter (same units as T uses length)
-  const pitch = bolt.pitch;   // lead for single-start
-
+  const d2 = bolt.d2;
+  const pitch = bolt.pitch;
   if(!(d2>0) || !(pitch>0) || !(Db_eff>0)) return null;
 
-  const alpha = 30 * Math.PI/180;         // half-angle of 60° thread
+  const alpha = 30 * Math.PI/180;
   const secA  = 1/Math.cos(alpha);
 
-  // lead angle
   const lambda = Math.atan( pitch / (Math.PI*d2) );
-
-  // friction angle for V-thread
   const phi = Math.atan( mu_t * secA );
 
-  // Denominator: torque per unit preload
   const threadTerm = (d2/2) * Math.tan(lambda + phi);
   const bearTerm   = mu_b * (Db_eff/2);
   const denom = threadTerm + bearTerm;
-
   if(!(denom>0)) return null;
 
   return T / denom;
 }
 
-// Proof load
 function calcProofLoad(state){
   const b = state.bolt.data;
   const g = state.bolt.grade;
   if(!b || !g) return null;
 
   if(state.units === "imperial"){
-    const Sp = g.Sp_imp || null; // psi
-    return Sp ? Sp*b.At : null;  // lbf
+    const Sp = g.Sp_imp || null;
+    return Sp ? Sp*b.At : null;
   } else {
-    const Sp = g.Sp_met || null; // MPa = N/mm^2
-    return Sp ? Sp*b.At : null;  // N (since At in mm^2)
+    const Sp = g.Sp_met || null;
+    return Sp ? Sp*b.At : null;
   }
 }
 
 /* ============================================================
    Solver + output tables
    ============================================================ */
-
 function runSolveForCurrentSelection(){
   const state = readState();
   const ev = evaluateCurrentBolt(state);
@@ -1107,7 +914,6 @@ function runSolveForCurrentSelection(){
     return;
   }
 
-  // Status logic (same as before)
   let status = "OK";
   let cls = "ok";
   if(ev.sepMargin!=null && ev.sepMargin < 0){ status = "Separates"; cls="err"; }
@@ -1142,9 +948,7 @@ function runSolveForCurrentSelection(){
   ];
   renderSummary(rows);
 
-  // Draw + debug
   drawJoint(state, ev.geom);
-//  $("debugOut").textContent = JSON.stringify({ state, eval: ev }, null, 2);
 }
 
 function renderSummary(rows){
@@ -1183,12 +987,11 @@ function updateRightPills(){
 /* ============================================================
    Drawing (scaled)
    ============================================================ */
-
 function clipPlateMinusHole(ctx, x, y, w, h, holeX, holeW){
   ctx.beginPath();
   ctx.rect(x, y, w, h);
-  ctx.rect(holeX, y, holeW, h);      // second rect = hole
-  ctx.clip("evenodd");               // clip to plate area minus hole
+  ctx.rect(holeX, y, holeW, h);
+  ctx.clip("evenodd");
 }
 
 function drawJoint(state, geom){
@@ -1203,7 +1006,6 @@ function drawJoint(state, geom){
   const b = state.bolt.data;
   if(!b || !geom) return;
 
-  // ---- Scale model ----
   const headH = b.headH, nutH = b.nutH;
   const stackH = geom.Lg;
   const totalH = headH + stackH + nutH;
@@ -1215,7 +1017,6 @@ function drawJoint(state, geom){
   const maxD = Math.max(b.headD, b.nutD, geom.Db_top, geom.Db_bot, b.d);
   const availX = W - 2*pad;
 
-  // Scale to fit height, but allow plates to be wide like Shigley
   const sY = totalH > 0 ? (availH / totalH) : 1;
   const sX = maxD > 0 ? (0.58*availX / maxD) : 1;
   const s  = Math.min(sX, sY);
@@ -1230,18 +1031,15 @@ function drawJoint(state, geom){
   const yNutTop = yStackBot;
   const yNutBot = yNutTop + Lpx(nutH);
 
-  // ---- Plate width (full member look) ----
   const plateHalfW = Math.max(Dpx(maxD)*1.15, (W-2*pad)*0.38);
   const holeW = Dpx(geom.dh);
 
-  // ---- Bolt look ----
-const shankW  = Dpx(b.d);
-const threadW = Dpx(b.d2); // (optional) make threaded portion slightly smaller
-  
-const yThreadStart = yStackTop + Lpx(geom.Lsh);
+  const shankW  = Dpx(b.d);
+  const threadW = Dpx(b.d2);
+
+  const yThreadStart = yStackTop + Lpx(geom.Lsh);
   const yThreadEnd   = yStackBot;
 
-  // ---- Draw members (hatched plates) ----
   const layers = [];
   if(state.geom.useHeadWasher && geom.tHW>0) layers.push({t:state.geom.tHeadWasher, kind:"washer"});
   state.geom.members.forEach((m,i)=> layers.push({t:m.t, kind:"member", hatchDir:(i%2===0?1:-1)}));
@@ -1252,52 +1050,46 @@ const yThreadStart = yStackTop + Lpx(geom.Lsh);
     const h = Lpx(L.t);
     if(h <= 0) continue;
 
-    // plate body
     ctx.save();
     ctx.fillStyle = (L.kind==="washer") ? "#eef2f7" : "#f7f7f7";
     ctx.strokeStyle = "#4b5563";
     ctx.lineWidth = 1;
 
-const x0 = cx - plateHalfW;
-const w0 = 2*plateHalfW;
-const holeX = cx - holeW/2;
+    const x0 = cx - plateHalfW;
+    const w0 = 2*plateHalfW;
+    const holeX = cx - holeW/2;
 
-// plate fill + stroke (with hole via even-odd)
-ctx.beginPath();
-ctx.rect(x0, y, w0, h);
-ctx.rect(holeX, y, holeW, h);
-ctx.fill("evenodd");
-ctx.stroke();
+    ctx.beginPath();
+    ctx.rect(x0, y, w0, h);
+    ctx.rect(holeX, y, holeW, h);
+    ctx.fill("evenodd");
+    ctx.stroke();
 
-// hatch members clipped to plate minus hole
-if(L.kind === "member"){
-  ctx.save();
-  clipPlateMinusHole(ctx, x0, y, w0, h, holeX, holeW);
-  hatchRect(ctx, x0, y, w0, h, L.hatchDir, 10, "#9ca3af");
-  ctx.restore();
-}
+    if(L.kind === "member"){
+      ctx.save();
+      clipPlateMinusHole(ctx, x0, y, w0, h, holeX, holeW);
+      hatchRect(ctx, x0, y, w0, h, L.hatchDir, 10, "#9ca3af");
+      ctx.restore();
+    }
     ctx.restore();
     y += h;
   }
 
-  // ---- Draw bolt shank (pink-ish like book) ----
+  // bolt shank
   ctx.save();
   ctx.fillStyle = "#d6a3a8";
   ctx.strokeStyle = "#7c2d32";
   ctx.lineWidth = 1.25;
-
-  // shank rectangle
   ctx.beginPath();
   ctx.rect(cx - shankW/2, yHeadTop + 2, shankW, (yNutBot - yHeadTop) - 4);
   ctx.fill();
   ctx.stroke();
   ctx.restore();
 
-  // ---- Threads ONLY where threaded in grip ----
+  // threads (only threaded length)
   ctx.save();
   ctx.strokeStyle = "#7c2d32";
   ctx.lineWidth = 1;
-
   const xL = cx - threadW/2;
   const xR = cx + threadW/2;
   for(let yy=yThreadStart; yy<yThreadEnd; yy+=9){
@@ -1308,18 +1100,16 @@ if(L.kind === "member"){
   }
   ctx.restore();
 
-  // ---- Head + Nut blocks ----
+  // head + nut
   ctx.save();
   ctx.fillStyle = "#c78f95";
   ctx.strokeStyle = "#7c2d32";
   ctx.lineWidth = 1.25;
-
   drawHexBlock(ctx, cx, yHeadTop, Dpx(b.headD), Lpx(headH), 10);
   drawHexBlock(ctx, cx, yNutTop,  Dpx(b.nutD),  Lpx(nutH),  10);
-
   ctx.restore();
 
-  // ---- Washers as thin rings seated at interfaces ----
+  // washers / bearing faces
   if(state.geom.useHeadWasher){
     drawRingWasher(ctx, cx, yStackTop, Dpx(geom.Db_top), holeW, Math.max(3, Lpx(state.geom.tHeadWasher)));
   } else {
@@ -1333,10 +1123,9 @@ if(L.kind === "member"){
     drawBearingFace(ctx, cx, yStackBot-2, Dpx(b.nutD)*0.92, shankW);
   }
 
-  // ---- Load arrows P (like Shigley) ----
+  // load arrows
   const xA1 = cx - plateHalfW*0.72;
   const xA2 = cx + plateHalfW*0.72;
-
   drawArrow(ctx, xA1, yStackTop + 8, xA1, yStackTop - 55, "#111827");
   drawArrow(ctx, xA2, yStackTop + 8, xA2, yStackTop - 55, "#111827");
   drawArrow(ctx, xA1, yStackBot - 8, xA1, yStackBot + 55, "#111827");
@@ -1352,12 +1141,11 @@ if(L.kind === "member"){
   ctx.restore();
 }
 
-// --- Helpers (add if not present) ---
+// --- Helpers ---
 function hatchRect(ctx, x, y, w, h, dir=1, step=10, color="#9ca3af"){
   ctx.save();
   ctx.strokeStyle = color;
   ctx.lineWidth = 1;
-
   ctx.beginPath();
   ctx.rect(x,y,w,h);
   ctx.clip();
@@ -1424,21 +1212,38 @@ function drawBearingFace(ctx, cx, yAt, faceW, holeW){
   ctx.restore();
 }
 
+// FIXED: missing helper in your paste (prevents draw crash)
+function drawArrow(ctx, x1,y1,x2,y2, color="#111827"){
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 2;
+
+  ctx.beginPath();
+  ctx.moveTo(x1,y1);
+  ctx.lineTo(x2,y2);
+  ctx.stroke();
+
+  const ang = Math.atan2(y2-y1, x2-x1);
+  const head = 10;
+  ctx.beginPath();
+  ctx.moveTo(x2,y2);
+  ctx.lineTo(x2 - head*Math.cos(ang - Math.PI/6), y2 - head*Math.sin(ang - Math.PI/6));
+  ctx.lineTo(x2 - head*Math.cos(ang + Math.PI/6), y2 - head*Math.sin(ang + Math.PI/6));
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+}
 
 /* ============================================================
    Event wiring
    ============================================================ */
 function recalcAndDraw(runSolve){
   updateRightPills();
-
   const state = readState();
   const geom = deriveGeometry(state);
   if(geom) drawJoint(state, geom);
-
-  // Update debug quickly
-//  $("debugOut").textContent = JSON.stringify({state, derived:{geom}}, null, 2);
-
-  // If requested, run stub solve
   if(runSolve) runSolveForCurrentSelection();
 }
 
@@ -1472,11 +1277,16 @@ function resetDefaults(){
   $("muTmax").value = "0.20";
   $("muBmin").value = "0.12";
   $("muBmax").value = "0.20";
+
+  // FIXED: add default hole fit
+  $("holeFit").value = "normal";
   $("holeDia").value = "";
+
   $("proofLimit").value = "1.00";
 
   $("frustumAngle").value = "30";
-$("torqueAt").value = "nut";
+  $("torqueAt").value = "nut";
+
   updateBoltEDefault();
 
   setStatus("Ready", "ok");
@@ -1484,14 +1294,12 @@ $("torqueAt").value = "nut";
 }
 
 function bindEvents(){
-  // Units checkbox: swaps families
   $("isImperial").addEventListener("change", ()=>{
     rebuildBoltFamilyOptions();
     rebuildGradeOptions();
     rebuildSizeOptions();
     updateBoltEDefault();
 
-    // Adjust some default example numbers so the picture stays reasonable
     if($("isImperial").checked){
       $("tHeadWasher").value = "0.06";
       $("odHeadWasher").value = "1.00";
@@ -1516,7 +1324,6 @@ function bindEvents(){
   $("boltFamily").addEventListener("change", ()=>{
     rebuildGradeOptions();
     rebuildSizeOptions();
-    // default E per units
     updateBoltEDefault();
     recalcAndDraw(false);
   });
@@ -1529,7 +1336,6 @@ function bindEvents(){
   $("boltGrade").addEventListener("change", ()=>recalcAndDraw(false));
   $("boltSize").addEventListener("change", ()=>recalcAndDraw(false));
 
-  // Geometry inputs
   [
     "useHeadWasher","tHeadWasher","odHeadWasher","matHeadWasher",
     "useNutWasher","tNutWasher","odNutWasher","matNutWasher",
@@ -1544,31 +1350,24 @@ function bindEvents(){
     recalcAndDraw(false);
   });
 
-  // Loads
+  // FIXED: include holeFit
+  ["Pext","Ttarget","torqueAt","Ttol","muTmin","muTmax","muBmin","muBmax","holeFit","holeDia","proofLimit"]
+    .forEach(id=>{
+      $(id).addEventListener("input", ()=>recalcAndDraw(false));
+      $(id).addEventListener("change", ()=>recalcAndDraw(false));
+    });
 
-["Pext","Ttarget","torqueAt","Ttol","muTmin","muTmax","muBmin","muBmax","holeDia","proofLimit"]
-  .forEach(id=>{
-    $(id).addEventListener("input", ()=>recalcAndDraw(false));
-    $(id).addEventListener("change", ()=>recalcAndDraw(false));
-  });
-
-
-  // Buttons
   $("btnSolve").addEventListener("click", runSolveForCurrentSelection);
   $("btnRedraw").addEventListener("click", ()=>recalcAndDraw(false));
   $("btnReset").addEventListener("click", resetDefaults);
 
-$("btnScan").addEventListener("click", runSizeScan);
-
+  $("btnScan").addEventListener("click", runSizeScan);
 }
-
-
 
 /* ============================================================
    Init
    ============================================================ */
 (function init(){
-  // Materials selects
   buildMaterialsSelect($("matHeadWasher"));
   buildMaterialsSelect($("matNutWasher"));
   $("matHeadWasher").value = "steel";
@@ -1588,18 +1387,13 @@ function evaluateCurrentBolt(state){
   const geom = deriveGeometry(state);
   if(!geom || !state.bolt.data) return { ok:false, reason:"No bolt/geometry" };
 
-  // Stiffnesses
   const kbOut = calcBoltStiffness(state, geom);
   const kmOut = calcMemberStiffnessShigley(state, geom);
   const C = (kbOut.kb + kmOut.km) > 0 ? kbOut.kb/(kbOut.kb + kmOut.km) : null;
 
-  // Preload bounds from real thread+bearing model
   const preload = calcPreloadBoundsThreadBearing(state, geom);
-
-  // Proof
   const Fproof = calcProofLoad(state);
 
-  // Checks
   const P = state.loads.P;
   const sepReq = (C!=null) ? (1-C)*P : null;
   const sepMargin = (preload?.Fmin!=null && sepReq!=null) ? (preload.Fmin - sepReq) : null;
@@ -1611,13 +1405,7 @@ function evaluateCurrentBolt(state){
   const okProof = (proofMargin==null) ? false : (proofMargin >= 0);
   const ok = okSep && okProof;
 
-  return {
-    ok,
-    geom, kbOut, kmOut, C,
-    preload, Fproof,
-    sepReq, sepMargin,
-    FbMax, proofMargin
-  };
+  return { ok, geom, kbOut, kmOut, C, preload, Fproof, sepReq, sepMargin, FbMax, proofMargin };
 }
 
 function runSizeScan(){
@@ -1649,7 +1437,7 @@ function runSizeScan(){
     if(band.feasible){
       bestIdx = idx;
       bestBand = band;
-      break; // smallest passing
+      break;
     }
   }
 
@@ -1658,23 +1446,20 @@ function runSizeScan(){
     return;
   }
 
-  // select the bolt size
   $("boltSize").value = String(bestIdx);
   updateRightPills();
 
-  // write the recommended torque setting into the UI (so Solve matches scan intent)
   if(bestBand?.Tset != null){
     $("Ttarget").value = String(bestBand.Tset);
   }
 
-  // run full solve using the recommended torque
   runSolveForCurrentSelection();
-
   setStatus(`Scan OK → ${list[bestIdx].label}`, "ok");
 }
 </script>
 </body>
 </html>
+
 
 
 
