@@ -399,6 +399,91 @@ BOLTS.astm.fine   = JSON.parse(JSON.stringify(BOLTS.sae_j429.fine));
    ============================================================ */
 const $ = id => document.getElementById(id);
 
+// Torque-per-preload factor g(mu_t, mu_b) for thread + bearing (same model you used)
+// T = F * g(...)
+function gThreadBearing(bolt, Db_eff, mu_t, mu_b){
+  if(!bolt || !(Db_eff>0)) return null;
+
+  const d2 = bolt.d2;
+  const pitch = bolt.pitch;
+  if(!(d2>0) || !(pitch>0)) return null;
+
+  const alpha = 30 * Math.PI/180; // half-angle for 60° thread
+  const secA  = 1/Math.cos(alpha);
+
+  const lambda = Math.atan( pitch / (Math.PI*d2) );
+  const phi    = Math.atan( mu_t * secA );
+
+  const threadTerm = (d2/2) * Math.tan(lambda + phi);
+  const bearTerm   = mu_b * (Db_eff/2);
+
+  const g = threadTerm + bearTerm;
+  return (g>0) ? g : null;
+}
+
+// Compute the torque band that GUARANTEES:
+// - no separation at low torque + high friction
+// - no over-proof at high torque + low friction
+function torqueBandForState(state, geom){
+  const b = state.bolt.data;
+  if(!b || !geom) return { feasible:false, reason:"No bolt/geom" };
+
+  // stiffness split
+  const kbOut = calcBoltStiffness(state, geom);
+  const kmOut = calcMemberStiffnessShigley(state, geom);
+  const C = (kbOut.kb + kmOut.km) > 0 ? kbOut.kb/(kbOut.kb + kmOut.km) : null;
+  if(C==null) return { feasible:false, reason:"Bad stiffness" };
+
+  const P = state.loads.P;
+
+  // Separation requirement
+  const Fi_req = (1 - C) * P; // you can multiply by a margin factor later if desired
+
+  // Proof constraint gives allowable max preload
+  const Fproof = calcProofLoad(state);
+  if(!(Fproof>0)) return { feasible:false, reason:"No proof load" };
+
+  const Fi_max_allow = state.loads.proofLimit * Fproof - C * P;
+  if(!(Fi_max_allow>0)) return { feasible:false, reason:"No allowable preload" };
+
+  // Effective bearing friction diameter (depends on where torque is applied)
+  const D_outer = (state.loads.torqueAt === "head") ? geom.Db_top : geom.Db_bot;
+  const D_inner = geom.dh;
+  const Db_eff  = 0.5*(D_outer + D_inner);
+
+  // Worst cases for torque window
+  const tol = state.loads.TtolPct;          // ± as fraction
+  const muT_hi = state.loads.muTmax;
+  const muB_hi = state.loads.muBmax;
+  const muT_lo = state.loads.muTmin;
+  const muB_lo = state.loads.muBmin;
+
+  const g_hi = gThreadBearing(b, Db_eff, muT_hi, muB_hi); // high friction => big g
+  const g_lo = gThreadBearing(b, Db_eff, muT_lo, muB_lo); // low friction  => small g
+
+  if(!(g_hi>0) || !(g_lo>0)) return { feasible:false, reason:"Bad g()" };
+
+  // Guarantee min preload under Tmin = T*(1-tol) with high friction:
+  // Fi_min = Tmin / g_hi >= Fi_req  => T >= Fi_req * g_hi / (1 - tol)
+  const TminReq = Fi_req * g_hi / Math.max(1e-12, (1 - tol));
+
+  // Guarantee max preload under Tmax = T*(1+tol) with low friction:
+  // Fi_max = Tmax / g_lo <= Fi_max_allow => T <= Fi_max_allow * g_lo / (1 + tol)
+  const TmaxAllow = Fi_max_allow * g_lo / (1 + tol);
+
+  const feasible = (TminReq <= TmaxAllow);
+
+  const Tset = feasible ? 0.5*(TminReq + TmaxAllow) : null;
+
+  return {
+    feasible,
+    reason: feasible ? "OK" : "No feasible torque band",
+    C, Fi_req, Fi_max_allow, Fproof,
+    Db_eff, TminReq, TmaxAllow, Tset
+  };
+}
+
+
 function fmt(x, digits=4){
   if (x === null || x === undefined || Number.isNaN(x)) return "—";
   const ax = Math.abs(x);
@@ -1074,6 +1159,13 @@ function updateRightPills(){
    Drawing (scaled)
    ============================================================ */
 
+function clipPlateMinusHole(ctx, x, y, w, h, holeX, holeW){
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.rect(holeX, y, holeW, h);      // second rect = hole
+  ctx.clip("evenodd");               // clip to plate area minus hole
+}
+
 function drawJoint(state, geom){
   const c = $("jointCanvas");
   const ctx = c.getContext("2d");
@@ -1141,21 +1233,24 @@ function drawJoint(state, geom){
     ctx.strokeStyle = "#4b5563";
     ctx.lineWidth = 1;
 
-    ctx.beginPath();
-    ctx.rect(cx - plateHalfW, y, 2*plateHalfW, h);
-    ctx.fill();
-    ctx.stroke();
+const x0 = cx - plateHalfW;
+const w0 = 2*plateHalfW;
+const holeX = cx - holeW/2;
 
-    // hole cutout
-    ctx.globalCompositeOperation = "destination-out";
-    ctx.fillRect(cx - holeW/2, y, holeW, h);
-    ctx.globalCompositeOperation = "source-over";
+// plate fill + stroke (with hole via even-odd)
+ctx.beginPath();
+ctx.rect(x0, y, w0, h);
+ctx.rect(holeX, y, holeW, h);
+ctx.fill("evenodd");
+ctx.stroke();
 
-    // hatch members
-    if(L.kind==="member"){
-      hatchRect(ctx, cx - plateHalfW, y, 2*plateHalfW, h, L.hatchDir, 10, "#9ca3af");
-    }
-
+// hatch members clipped to plate minus hole
+if(L.kind === "member"){
+  ctx.save();
+  clipPlateMinusHole(ctx, x0, y, w0, h, holeX, holeW);
+  hatchRect(ctx, x0, y, w0, h, L.hatchDir, 10, "#9ca3af");
+  ctx.restore();
+}
     ctx.restore();
     y += h;
   }
@@ -1511,10 +1606,10 @@ function runSizeScan(){
     return;
   }
 
-  // keep hole override if user supplied one
   const holeOverride = base.loads.holeDiaOverride;
 
   let bestIdx = null;
+  let bestBand = null;
 
   for(let idx=0; idx<list.length; idx++){
     const state = JSON.parse(JSON.stringify(base));
@@ -1522,9 +1617,13 @@ function runSizeScan(){
     state.bolt.data = list[idx];
     state.loads.holeDiaOverride = holeOverride;
 
-    const ev = evaluateCurrentBolt(state);
-    if(ev.ok){
+    const geom = deriveGeometry(state);
+    if(!geom) continue;
+
+    const band = torqueBandForState(state, geom);
+    if(band.feasible){
       bestIdx = idx;
+      bestBand = band;
       break; // smallest passing
     }
   }
@@ -1534,15 +1633,24 @@ function runSizeScan(){
     return;
   }
 
+  // select the bolt size
   $("boltSize").value = String(bestIdx);
   updateRightPills();
+
+  // write the recommended torque setting into the UI (so Solve matches scan intent)
+  if(bestBand?.Tset != null){
+    $("Ttarget").value = String(bestBand.Tset);
+  }
+
+  // run full solve using the recommended torque
   runSolveForCurrentSelection();
+
   setStatus(`Scan OK → ${list[bestIdx].label}`, "ok");
 }
-
 </script>
 </body>
 </html>
+
 
 
 
