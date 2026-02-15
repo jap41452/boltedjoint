@@ -1511,60 +1511,39 @@ function runSizeScan(){
     return;
   }
 
-  // Keep current hole override if user provided one; otherwise allow size defaults to change by size.
+  // keep hole override if user supplied one
   const holeOverride = base.loads.holeDiaOverride;
 
   let bestIdx = null;
-  let bestEval = null;
 
   for(let idx=0; idx<list.length; idx++){
-    const state = JSON.parse(JSON.stringify(base)); // modern browsers OK
+    const state = JSON.parse(JSON.stringify(base));
     state.bolt.sizeIdx = idx;
     state.bolt.data = list[idx];
-
-    // If no hole override, deriveGeometry will use bolt default hole for that size (good)
     state.loads.holeDiaOverride = holeOverride;
 
     const ev = evaluateCurrentBolt(state);
     if(ev.ok){
       bestIdx = idx;
-      bestEval = ev;
       break; // smallest passing
     }
   }
 
-if(bestIdx === null){
-  setStatus("No passing size (scan)", "err");
-  return;
-}
-    // Optional: show worst offender for the largest bolt (for diagnostics)
-    // Evaluate last size:
-    const state = structuredClone(base);
-    state.bolt.sizeIdx = list.length-1;
-    state.bolt.data = list[list.length-1];
-    state.loads.holeDiaOverride = holeOverride;
-    const ev = evaluateCurrentBolt(state);
-    $("debugOut").textContent = JSON.stringify({
-      message:"No passing size found in current table range.",
-      lastTried:list[list.length-1]?.label,
-      lastEval:ev
-    }, null, 2);
+  if(bestIdx === null){
+    setStatus("No passing size (scan)", "err");
     return;
   }
 
-  // Update UI selection to chosen size
   $("boltSize").value = String(bestIdx);
   updateRightPills();
-
-  // Run the standard solve/report pipeline for the selected size
-  // (reuse your existing solve function but make sure it uses evaluateCurrentBolt or the same logic)
   runSolveForCurrentSelection();
-
   setStatus(`Scan OK → ${list[bestIdx].label}`, "ok");
 }
+
 </script>
 </body>
 </html>
+
 
 
 
