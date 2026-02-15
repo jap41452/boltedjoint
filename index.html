@@ -1022,9 +1022,13 @@ function drawJoint(state, geom){
   const b = state.bolt.data;
   if(!b || !geom) return;
 
-  const headH = b.headH, nutH = b.nutH;
+ // Small protrusion beyond nut for realism (Shigley-style)
+const protrudeL = Math.max(0.25 * b.d, 2 * b.pitch); // length-units (in or mm)
+
+
+ const headH = b.headH, nutH = b.nutH;
   const stackH = geom.Lg;
-  const totalH = headH + stackH + nutH;
+  const totalH = headH + stackH + nutH + protrudeL;
 
   const topY = pad;
   const botY = H - pad;
@@ -1046,6 +1050,7 @@ function drawJoint(state, geom){
   const yStackBot = yStackTop + Lpx(stackH);
   const yNutTop = yStackBot;
   const yNutBot = yNutTop + Lpx(nutH);
+const yBoltEnd = yNutBot + Lpx(protrudeL);
 
   const plateHalfW = Math.max(Dpx(maxD)*1.15, (W-2*pad)*0.38);
   const holeW = Dpx(geom.dh);
@@ -1054,13 +1059,18 @@ function drawJoint(state, geom){
   const threadW = Dpx(b.d2);
 
   const yThreadStart = yStackTop + Lpx(geom.Lsh);
-  const yThreadEnd   = yStackBot;
+ const yThreadEnd = yBoltEnd; // show threads continuing through nut and protrusion
 
-  const layers = [];
-  if(state.geom.useHeadWasher && geom.tHW>0) layers.push({t:state.geom.tHeadWasher, kind:"washer"});
-  state.geom.members.forEach((m,i)=> layers.push({t:m.t, kind:"member", hatchDir:(i%2===0?1:-1)}));
-  if(state.geom.useNutWasher && geom.tNW>0) layers.push({t:state.geom.tNutWasher, kind:"washer"});
-
+const layers = [];
+if (state.geom.useHeadWasher && geom.tHW > 0) {
+  layers.push({ t: state.geom.tHeadWasher, kind: "washer", od: geom.Db_top });
+}
+state.geom.members.forEach((m,i)=> {
+  layers.push({ t: m.t, kind: "member", hatchDir: (i%2===0 ? 1 : -1) });
+});
+if (state.geom.useNutWasher && geom.tNW > 0) {
+  layers.push({ t: state.geom.tNutWasher, kind: "washer", od: geom.Db_bot });
+}
   let y = yStackTop;
   for(const L of layers){
     const h = Lpx(L.t);
@@ -1071,9 +1081,12 @@ function drawJoint(state, geom){
     ctx.strokeStyle = "#4b5563";
     ctx.lineWidth = 1;
 
-    const x0 = cx - plateHalfW;
-    const w0 = 2*plateHalfW;
-    const holeX = cx - holeW/2;
+    // Option A: washers are drawn only to OD width; members remain full width
+const halfW = (L.kind === "washer" && L.od) ? (Dpx(L.od) / 2) : plateHalfW;
+
+const x0 = cx - halfW;
+const w0 = 2*halfW;
+const holeX = cx - holeW/2;
 
     ctx.beginPath();
     ctx.rect(x0, y, w0, h);
@@ -1097,7 +1110,7 @@ function drawJoint(state, geom){
   ctx.strokeStyle = "#7c2d32";
   ctx.lineWidth = 1.25;
   ctx.beginPath();
-  ctx.rect(cx - shankW/2, yHeadTop + 2, shankW, (yNutBot - yHeadTop) - 4);
+  ctx.rect(cx - shankW/2, yHeadTop + 2, shankW, (yBoltEnd - yHeadTop) - 4);
   ctx.fill();
   ctx.stroke();
   ctx.restore();
@@ -1126,15 +1139,19 @@ function drawJoint(state, geom){
   drawDimBracket(ctx, xDim, yThreadStart, yStackBot,    `Lth = ${fmt(geom.Lth)} ${state.u.L}`);
 
 
-  // head + nut
-  ctx.save();
-  ctx.fillStyle = "#c78f95";
-  ctx.strokeStyle = "#7c2d32";
-  ctx.lineWidth = 1.25;
-  drawHexBlock(ctx, cx, yHeadTop, Dpx(b.headD), Lpx(headH), 10);
-  drawHexBlock(ctx, cx, yNutTop,  Dpx(b.nutD),  Lpx(nutH),  10);
-  ctx.restore();
+// head + nut
+ctx.save();
+ctx.fillStyle = "#c78f95";
+ctx.strokeStyle = "#7c2d32";
+ctx.lineWidth = 1.25;
 
+drawHexFlatBlock(ctx, cx, yHeadTop, Dpx(b.headD), Lpx(headH));
+drawHexFlatBlock(ctx, cx, yNutTop,  Dpx(b.nutD),  Lpx(nutH));
+
+ctx.restore();
+
+drawHexFlatBlock(ctx, cx, yHeadTop, Dpx(b.headD), Lpx(headH));
+drawHexFlatBlock(ctx, cx, yNutTop,  Dpx(b.nutD),  Lpx(nutH));
   // washers / bearing faces
   if(state.geom.useHeadWasher){
     drawRingWasher(ctx, cx, yStackTop, Dpx(geom.Db_top), holeW, Math.max(3, Lpx(state.geom.tHeadWasher)));
@@ -1148,6 +1165,7 @@ function drawJoint(state, geom){
   } else {
     drawBearingFace(ctx, cx, yStackBot-2, Dpx(b.nutD)*0.92, shankW);
   }
+
 
   // load arrows
   const xA1 = cx - plateHalfW*0.72;
@@ -1191,23 +1209,44 @@ function hatchRect(ctx, x, y, w, h, dir=1, step=10, color="#9ca3af"){
   ctx.restore();
 }
 
-function drawHexBlock(ctx, cx, yTop, w, h, chamfer=10){
+// Professional-looking head/nut side view: flat vertical sides + small chamfers
+function drawHexFlatBlock(ctx, cx, yTop, w, h){
   const x = cx - w/2;
   const y = yTop;
-  const c = Math.min(chamfer, w*0.18, h*0.35);
+
+  // chamfers
+  const c = Math.min(w * 0.12, h * 0.18, 14);
 
   ctx.beginPath();
-  ctx.moveTo(x+c, y);
-  ctx.lineTo(x+w-c, y);
-  ctx.lineTo(x+w, y+h*0.5);
-  ctx.lineTo(x+w-c, y+h);
-  ctx.lineTo(x+c, y+h);
-  ctx.lineTo(x, y+h*0.5);
+  // top edge with chamfers
+  ctx.moveTo(x + c, y);
+  ctx.lineTo(x + w - c, y);
+  ctx.lineTo(x + w, y + c);
+  // right flat
+  ctx.lineTo(x + w, y + h - c);
+  // bottom edge with chamfers
+  ctx.lineTo(x + w - c, y + h);
+  ctx.lineTo(x + c, y + h);
+  ctx.lineTo(x, y + h - c);
+  // left flat
+  ctx.lineTo(x, y + c);
   ctx.closePath();
+
   ctx.fill();
   ctx.stroke();
-}
 
+  // subtle face line to hint at "flats"
+  ctx.save();
+  ctx.strokeStyle = "rgba(0,0,0,0.18)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x + w*0.18, y + h*0.12);
+  ctx.lineTo(x + w*0.18, y + h*0.88);
+  ctx.moveTo(x + w*0.82, y + h*0.12);
+  ctx.lineTo(x + w*0.82, y + h*0.88);
+  ctx.stroke();
+  ctx.restore();
+}
 function drawRingWasher(ctx, cx, yTop, ODpx, holeWpx, tpx){
   ctx.save();
   ctx.fillStyle = "#e5e7eb";
@@ -1276,32 +1315,6 @@ function drawDimBracket(ctx, x, y0, y1, label, color="#111827"){
   ctx.restore();
 }
 
-function drawDimBracket(ctx, x, y0, y1, label, color="#111827"){
-  const top = Math.min(y0,y1), bot = Math.max(y0,y1);
-  const cap = 7;
-
-  ctx.save();
-  ctx.strokeStyle = color;
-  ctx.fillStyle = color;
-  ctx.lineWidth = 1;
-
-  // vertical
-  ctx.beginPath();
-  ctx.moveTo(x, top);
-  ctx.lineTo(x, bot);
-  // end caps
-  ctx.moveTo(x-cap, top);
-  ctx.lineTo(x+cap, top);
-  ctx.moveTo(x-cap, bot);
-  ctx.lineTo(x+cap, bot);
-  ctx.stroke();
-
-  // label
-  ctx.font = "13px system-ui";
-  ctx.textBaseline = "middle";
-  ctx.fillText(label, x + 10, (top+bot)/2);
-  ctx.restore();
-}
 
 // FIXED: missing helper in your paste (prevents draw crash)
 function drawArrow(ctx, x1,y1,x2,y2, color="#111827"){
@@ -1553,6 +1566,7 @@ function runSizeScan(){
 </script>
 </body>
 </html>
+
 
 
 
