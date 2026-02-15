@@ -245,15 +245,27 @@
           <label>μ_bearing (max)</label>
           <input id="muBmax" type="number" step="any" value="0.20" />
         </div>
-        <div>
-          <label>Clearance Hole Dia (override)</label>
-          <input id="holeDia" type="number" step="any" placeholder="blank = default from bolt" />
-        </div>
-        <div>
-          <label>Proof Utilization Limit</label>
-          <input id="proofLimit" type="number" step="any" value="1.00" />
-        </div>
-      </div>
+
+<div class="row3">
+  <div>
+    <label>Hole Fit</label>
+    <select id="holeFit">
+      <option value="normal" selected>Normal (standard)</option>
+      <option value="close">Close</option>
+      <option value="loose">Loose</option>
+      <option value="custom">Custom (override)</option>
+    </select>
+  </div>
+  <div>
+    <label>Clearance Hole Dia (override)</label>
+    <input id="holeDia" type="number" step="any" placeholder="used only if Hole Fit = Custom" />
+  </div>
+  <div>
+    <label>Proof Utilization Limit</label>
+    <input id="proofLimit" type="number" step="any" value="1.00" />
+  </div>
+</div>
+
 
 <div class="btnbar" style="margin-top:10px;">
   <button class="primary" id="btnScan">Minimum Size Scan</button>
@@ -631,7 +643,7 @@ function readState(){
   const family = $("boltFamily").value;
   const series = $("threadSeries").value;
   const gradeKey = $("boltGrade").value;
-
+holeFit: $("holeFit").value, // close|normal|loose|custom
   const sizeIdx = Number($("boltSize").value || 0);
   const bolt = (BOLTS[family] && BOLTS[family][series]) ? BOLTS[family][series][sizeIdx] : null;
   const grade = (GRADES[family] || []).find(g=>g.key===gradeKey) || null;
@@ -709,7 +721,20 @@ function deriveGeometry(state){
   const Db_bot = state.geom.useNutWasher  ? state.geom.odNutWasher  : b.nutD;
 
   // Hole diameter default
-  const dh = (state.loads.holeDiaOverride !== null) ? state.loads.holeDiaOverride : b.hole;
+ // const dh = (state.loads.holeDiaOverride !== null) ? state.loads.holeDiaOverride : b.hole;
+
+  // Hole diameter logic
+  let dh;
+  if (state.loads.holeFit === "custom") {
+    dh = (state.loads.holeDiaOverride !== null) ? state.loads.holeDiaOverride
+                                               : (b.holeNormal ?? b.hole);
+  } else if (state.loads.holeFit === "close") {
+    dh = b.holeClose ?? b.holeNormal ?? b.hole;
+  } else if (state.loads.holeFit === "loose") {
+    dh = b.holeLoose ?? b.holeNormal ?? b.hole;
+  } else {
+    dh = b.holeNormal ?? b.hole;
+  }
 
   // Shank and thread lengths within grip
   const Lsh = clamp(state.geom.Lshank, 0, Lg);
@@ -1210,10 +1235,10 @@ function drawJoint(state, geom){
   const holeW = Dpx(geom.dh);
 
   // ---- Bolt look ----
-  const shankW = Dpx(b.d)*0.62;
-  const threadW = shankW*0.92;
-
-  const yThreadStart = yStackTop + Lpx(geom.Lsh);
+const shankW  = Dpx(b.d);
+const threadW = Dpx(b.d2); // (optional) make threaded portion slightly smaller
+  
+const yThreadStart = yStackTop + Lpx(geom.Lsh);
   const yThreadEnd   = yStackBot;
 
   // ---- Draw members (hatched plates) ----
@@ -1650,6 +1675,7 @@ function runSizeScan(){
 </script>
 </body>
 </html>
+
 
 
 
