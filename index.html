@@ -1103,6 +1103,8 @@ function drawJoint(state, geom){
   ctx.restore();
 
   // threads (only threaded length)
+
+  // threads (only threaded length)
   ctx.save();
   ctx.strokeStyle = "#7c2d32";
   ctx.lineWidth = 1;
@@ -1115,6 +1117,14 @@ function drawJoint(state, geom){
     ctx.stroke();
   }
   ctx.restore();
+
+  // ---- Thread start marker + dimension brackets ----
+  drawThreadStartMarker(ctx, cx, yThreadStart, shankW);
+
+  const xDim = cx + plateHalfW*0.82; // right-side annotation column
+  drawDimBracket(ctx, xDim, yStackTop,    yThreadStart, `Lsh = ${fmt(geom.Lsh)} ${state.u.L}`);
+  drawDimBracket(ctx, xDim, yThreadStart, yStackBot,    `Lth = ${fmt(geom.Lth)} ${state.u.L}`);
+
 
   // head + nut
   ctx.save();
@@ -1231,12 +1241,40 @@ function drawBearingFace(ctx, cx, yAt, faceW, holeW){
 
 // ---- Thread start marker + dimension brackets ----
 
-function drawThreadStartMarker(ctx, cx, yThreadStart, shankW);
+function drawThreadStartMarker(ctx, cx, y, shankW, color="#111827"){
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.25;
+  ctx.beginPath();
+  ctx.moveTo(cx - shankW*0.65, y);
+  ctx.lineTo(cx + shankW*0.65, y);
+  ctx.stroke();
+  ctx.restore();
+}
 
-const xDim = cx + plateHalfW*0.82;  // right-side annotation column
-drawDimBracket(ctx, xDim, yStackTop, yThreadStart, `Lsh = ${fmt(geom.Lsh)} ${state.u.L}`);
-drawDimBracket(ctx, xDim, yThreadStart, yStackBot, `Lth = ${fmt(geom.Lth)} ${state.u.L}`);
+function drawDimBracket(ctx, x, y0, y1, label, color="#111827"){
+  const top = Math.min(y0,y1), bot = Math.max(y0,y1);
+  const cap = 7;
 
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 1;
+
+  ctx.beginPath();
+  ctx.moveTo(x, top);
+  ctx.lineTo(x, bot);
+  ctx.moveTo(x-cap, top);
+  ctx.lineTo(x+cap, top);
+  ctx.moveTo(x-cap, bot);
+  ctx.lineTo(x+cap, bot);
+  ctx.stroke();
+
+  ctx.font = "13px system-ui";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, x + 10, (top+bot)/2);
+  ctx.restore();
+}
 
 function drawDimBracket(ctx, x, y0, y1, label, color="#111827"){
   const top = Math.min(y0,y1), bot = Math.max(y0,y1);
@@ -1515,6 +1553,7 @@ function runSizeScan(){
 </script>
 </body>
 </html>
+
 
 
 
