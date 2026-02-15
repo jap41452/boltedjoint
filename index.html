@@ -111,17 +111,20 @@
         </div>
       </div>
 
-      <div class="row">
-        <div>
-          <label>Bolt Material E (auto from family; override)</label>
-          <input id="boltE" type="number" step="any" />
-        </div>
-        <div>
-          <label>Frustum Half-Angle (deg)</label>
-          <input id="frustumAngle" type="number" step="any" value="30" />
-        </div>
-      </div>
-
+<div class="row3">
+  <div>
+    <label>Bolt Material E (auto from family; override)</label>
+    <input id="boltE" type="number" step="any" />
+  </div>
+  <div>
+    <label>Thread Compliance Factor η (0.80–1.00)</label>
+    <input id="etaThread" type="number" step="0.01" value="0.90" min="0.80" max="1.00" />
+  </div>
+  <div>
+    <label>Frustum Half-Angle (deg)</label>
+    <input id="frustumAngle" type="number" step="any" value="30" />
+  </div>
+</div>
       <div class="note">
         Washer bearing diameter rule: <b>if washer used → OD</b>. If no washer → bolt head / nut bearing diameter (from table placeholders).
       </div>
@@ -630,13 +633,15 @@ function readState(){
   return {
     units: isImp ? "imperial" : "metric",
     u,
-    bolt: {
-      family, series, gradeKey,
-      sizeIdx,
-      data: bolt,
-      grade: grade,
-      E: Number($("boltE").value || (isImp ? 30e6 : 200000))
-    },
+
+bolt: {
+  family, series, gradeKey,
+  sizeIdx,
+  data: bolt,
+  grade: grade,
+  E: Number($("boltE").value || (isImp ? 30e6 : 200000)),
+  etaThread: clamp(Number($("etaThread").value || 0.90), 0.80, 1.00)
+},
     geom: {
       frustumAngleDeg: Number($("frustumAngle").value || 30),
       useHeadWasher: $("useHeadWasher").value === "yes",
@@ -663,7 +668,7 @@ function readState(){
       muBmax: Number($("muBmax").value || 0),
 
       // FIXED: properly captured
-      holeFit: $("holeFit").value,
+       holeFit: $("holeFit").value,
 
       holeDiaOverride: $("holeDia").value.trim()==="" ? null : Number($("holeDia").value),
       proofLimit: Number($("proofLimit").value || 1.0)
@@ -710,11 +715,17 @@ function calcBoltStiffness(state, geom){
 
   const d = b.d;
   const A_shank = Math.PI * d*d / 4;
-  const At = b.At;
 
-  const comp = (geom.Lsh)/(A_shank*E) + (geom.Lth)/(At*E);
-  const kb = comp > 0 ? 1/comp : Infinity;
-  return { kb, A_shank, At };
+const At = b.At;
+const eta = (state?.bolt?.etaThread != null) ? state.bolt.etaThread : 0.90;
+const At_eff = eta * At;
+
+// Compliance = L/(A E)
+const comp = (geom.Lsh)/(A_shank*E) + (geom.Lth)/(At_eff*E);
+const kb = comp > 0 ? 1/comp : Infinity;
+
+return { kb, A_shank, At, eta, At_eff };
+
 }
 
 // ---- Shigley 30° frustum member stiffness (layered, two-sided) ----
@@ -929,6 +940,11 @@ function runSolveForCurrentSelection(){
 
     ["Torque applied at", state.loads.torqueAt === "head" ? "Head" : "Nut"],
     ["Effective bearing dia Db_eff", `${fmt(ev.preload?.Db_eff)} ${u.L}`],
+
+["Shank area As", `${fmt(ev.kbOut?.A_shank)} ${u.L}²`],
+["Tensile stress area At", `${fmt(ev.kbOut?.At)} ${u.L}²`],
+["Thread compliance η", `${fmt(ev.kbOut?.eta,3)}`],
+["Effective thread area η·At", `${fmt(ev.kbOut?.At_eff)} ${u.L}²`],
 
     ["Bolt stiffness kb", `${fmt(ev.kbOut?.kb)} ${u.F}/${u.L}`],
     ["Member stiffness km (Shigley)", `${fmt(ev.kmOut?.km)} ${u.F}/${u.L}`],
@@ -1212,6 +1228,43 @@ function drawBearingFace(ctx, cx, yAt, faceW, holeW){
   ctx.restore();
 }
 
+
+// ---- Thread start marker + dimension brackets ----
+
+function drawThreadStartMarker(ctx, cx, yThreadStart, shankW);
+
+const xDim = cx + plateHalfW*0.82;  // right-side annotation column
+drawDimBracket(ctx, xDim, yStackTop, yThreadStart, `Lsh = ${fmt(geom.Lsh)} ${state.u.L}`);
+drawDimBracket(ctx, xDim, yThreadStart, yStackBot, `Lth = ${fmt(geom.Lth)} ${state.u.L}`);
+
+
+function drawDimBracket(ctx, x, y0, y1, label, color="#111827"){
+  const top = Math.min(y0,y1), bot = Math.max(y0,y1);
+  const cap = 7;
+
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 1;
+
+  // vertical
+  ctx.beginPath();
+  ctx.moveTo(x, top);
+  ctx.lineTo(x, bot);
+  // end caps
+  ctx.moveTo(x-cap, top);
+  ctx.lineTo(x+cap, top);
+  ctx.moveTo(x-cap, bot);
+  ctx.lineTo(x+cap, bot);
+  ctx.stroke();
+
+  // label
+  ctx.font = "13px system-ui";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, x + 10, (top+bot)/2);
+  ctx.restore();
+}
+
 // FIXED: missing helper in your paste (prevents draw crash)
 function drawArrow(ctx, x1,y1,x2,y2, color="#111827"){
   ctx.save();
@@ -1270,6 +1323,8 @@ function resetDefaults(){
 
   $("Lshank").value = "0.75";
 
+
+
   $("Pext").value = "2000";
   $("Ttarget").value = "120";
   $("Ttol").value = "10";
@@ -1286,7 +1341,7 @@ function resetDefaults(){
 
   $("frustumAngle").value = "30";
   $("torqueAt").value = "nut";
-
+$("etaThread").value = "0.90";
   updateBoltEDefault();
 
   setStatus("Ready", "ok");
@@ -1336,12 +1391,13 @@ function bindEvents(){
   $("boltGrade").addEventListener("change", ()=>recalcAndDraw(false));
   $("boltSize").addEventListener("change", ()=>recalcAndDraw(false));
 
-  [
-    "useHeadWasher","tHeadWasher","odHeadWasher","matHeadWasher",
-    "useNutWasher","tNutWasher","odNutWasher","matNutWasher",
-    "Lshank","frustumAngle","boltE"
-  ].forEach(id=>{
-    $(id).addEventListener("input", ()=>recalcAndDraw(false));
+[
+  "useHeadWasher","tHeadWasher","odHeadWasher","matHeadWasher",
+  "useNutWasher","tNutWasher","odNutWasher","matNutWasher",
+  "Lshank","frustumAngle","boltE","etaThread"
+].forEach(id=>{
+    
+$(id).addEventListener("input", ()=>recalcAndDraw(false));
     $(id).addEventListener("change", ()=>recalcAndDraw(false));
   });
 
@@ -1459,6 +1515,7 @@ function runSizeScan(){
 </script>
 </body>
 </html>
+
 
 
 
