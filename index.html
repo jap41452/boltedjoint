@@ -55,17 +55,9 @@
   .status-ok{color:var(--ok); border-color:#b7e0c3; background:#f2fbf5;}
   .status-warn{color:var(--warn); border-color:#f1d6a8; background:#fffbf2;}
   .status-err{color:var(--err); border-color:#f0b4b4; background:#fff5f5;}
-  #canvasWrap{
-    background:#fff; border:1px solid var(--line);
-    border-radius:12px; padding:10px;
-  }
+  #canvasWrap{ background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px; }
   canvas{width:100%; height:420px; display:block;}
-  pre{
-    font-family:var(--mono); font-size:12px; background:#0b1220; color:#e5e7eb;
-    border-radius:12px; padding:12px; overflow:auto; margin:10px 0 0;
-  }
   .muted{color:var(--muted);}
-  .hr{height:1px; background:var(--line); margin:10px 0;}
   .rightGrid{display:grid; grid-template-columns: 1fr; gap:12px;}
   .note{font-size:12px; color:var(--muted); line-height:1.35;}
 </style>
@@ -125,6 +117,7 @@
           <input id="frustumAngle" type="number" step="any" value="30" />
         </div>
       </div>
+
       <div class="note">
         Washer bearing diameter rule: <b>if washer used → OD</b>. If no washer → bolt head / nut bearing diameter (from table placeholders).
       </div>
@@ -254,10 +247,10 @@
 
       <div class="row3">
         <div>
-          <label>Hole Fit</label>
+          <label>Hole Fit (table-based)</label>
           <select id="holeFit">
-            <option value="normal" selected>Normal (standard)</option>
             <option value="close">Close</option>
+            <option value="normal" selected>Normal</option>
             <option value="loose">Loose</option>
             <option value="custom">Custom (override)</option>
           </select>
@@ -280,7 +273,7 @@
       </div>
 
       <div class="small muted" style="margin-top:6px;">
-        Current solver computes geometry, stiffnesses, load fractions, and draws scaled joint immediately.
+        Clearance hole is now taken from Close/Normal/Loose tables (metric & inch). Custom overrides the table.
       </div>
     </div>
   </div>
@@ -293,13 +286,13 @@
           <div class="inline" style="gap:10px;">
             <span class="pill" id="unitsPill">Imperial</span>
             <span class="pill" id="familyPill">SAE J429</span>
-            <span class="pill" id="sizePill">—</span>
+            <span class="pill" id="sizePill">1/2-13</span>
           </div>
           <span class="pill" id="statusPill">Ready</span>
         </div>
         <canvas id="jointCanvas" width="1200" height="520"></canvas>
         <div class="note" style="margin-top:8px;">
-          Drawing is to scale based on your inputs (stack thicknesses & bearing diameters). Threads are shown extending into the members (Shigley-style schematic).
+          Drawing is to scale based on your inputs (stack thicknesses & bearing diameters). Threads are shown extending into the members and through the nut (Shigley-style schematic).
         </div>
       </div>
 
@@ -317,8 +310,9 @@
 
 <script>
 /* ============================================================
-   Material library + standards
+   Placeholder data tables (expand later)
    ============================================================ */
+
 const MATERIALS = [
   { key:"steel",      name:"Steel",            E_imp: 30e6, E_met: 200000 },
   { key:"stainless",  name:"Stainless Steel",  E_imp: 28e6, E_met: 193000 },
@@ -340,7 +334,7 @@ const BOLT_FAMILIES = {
 
 const GRADES = {
   sae_j429: [
-    { key:"G2", name:"Grade 2",  Sp_imp: 55e3 },
+    { key:"G2", name:"Grade 2",  Sp_imp: 55e3 },   // psi
     { key:"G5", name:"Grade 5",  Sp_imp: 85e3 },
     { key:"G8", name:"Grade 8",  Sp_imp: 120e3 }
   ],
@@ -349,221 +343,206 @@ const GRADES = {
     { key:"A490", name:"A490", Sp_imp: 130e3 }
   ],
   iso_metric: [
-    { key:"8.8",  name:"8.8",  Sp_met: 600 },
+    { key:"8.8",  name:"8.8",  Sp_met: 600 },     // MPa
     { key:"10.9", name:"10.9", Sp_met: 830 },
     { key:"12.9", name:"12.9", Sp_met: 970 }
   ]
 };
 
 /* ============================================================
-   Bolt geometry generators (EXPANDED: Imperial + ISO Metric)
+   Clearance hole tables (Close/Normal/Loose)
+   - We store min/max and also a nominal = (min+max)/2 for use.
+   - Metric table values from ASME B18.2.8 metric hole clearance chart (commonly aligned with ISO 273 practice classes).  :contentReference[oaicite:2]{index=2}
+   - Inch table values from ASME/ANSI clearance hole chart (close/normal/loose). :contentReference[oaicite:3]{index=3}
    ============================================================ */
 
-// Helpers for generated dimensions
-const PI = Math.PI;
-function avg(a,b){ return 0.5*(a+b); }
+function holeNom(min, max){ return 0.5*(min + max); }
 
-// Unified tensile stress area approximation
-function At_UN(d, tpi){
-  return 0.78539816339 * Math.pow(d - 0.9743/tpi, 2);
-}
-
-// ISO metric tensile stress area approximation (common approximation)
-function At_ISO(d, p){
-  // At ≈ (π/4)*(d - 0.9382*p)^2  (d in mm, p in mm)
-  return 0.78539816339 * Math.pow(d - 0.9382*p, 2);
-}
-
-// Basic pitch diameter approximation used in both (works well for schematic)
-function d2_basic(d, pitch){
-  return d - 0.64952 * pitch;
-}
-
-/* ----- Imperial head dimensions (approx table) -----
-   F = across flats, H = head height (in)
-   Used to make drawing look real.
-*/
-const HEX_HEAD_IMP = {
-  "0.25":   { F: avg(0.438,0.428), H: avg(0.163,0.150) },
-  "0.3125": { F: avg(0.500,0.489), H: avg(0.211,0.195) },
-  "0.375":  { F: avg(0.562,0.551), H: avg(0.243,0.226) },
-  "0.4375": { F: avg(0.625,0.612), H: avg(0.291,0.272) },
-  "0.5":    { F: avg(0.750,0.736), H: avg(0.323,0.302) },
-  "0.5625": { F: avg(0.812,0.798), H: avg(0.371,0.348) },
-  "0.625":  { F: avg(0.938,0.922), H: avg(0.403,0.378) },
-  "0.75":   { F: avg(1.125,1.100), H: avg(0.483,0.455) },
-  "0.875":  { F: avg(1.312,1.285), H: avg(0.563,0.531) },
-  "1":      { F: avg(1.500,1.469), H: avg(0.627,0.591) }
+const HOLES_METRIC = {
+  // key is nominal thread diameter in mm (integer or common decimal)
+  // values: { close:{min,max}, normal:{min,max}, loose:{min,max} }
+  5:  { close:{min:5.3, max:5.3},  normal:{min:5.5, max:5.5},  loose:{min:5.8, max:6.1} },
+  6:  { close:{min:6.4, max:6.4},  normal:{min:6.6, max:6.6},  loose:{min:7.0, max:7.36} },
+  8:  { close:{min:8.4, max:8.4},  normal:{min:9.0, max:9.0},  loose:{min:10.0,max:10.36} },
+  10: { close:{min:10.5,max:10.5}, normal:{min:11.0,max:11.0}, loose:{min:12.0,max:12.43} },
+  12: { close:{min:13.0,max:13.0}, normal:{min:13.5,max:13.5}, loose:{min:14.5,max:14.93} },
+  14: { close:{min:15.0,max:15.0}, normal:{min:15.5,max:15.5}, loose:{min:16.5,max:16.93} },
+  16: { close:{min:17.0,max:17.0}, normal:{min:17.5,max:17.5}, loose:{min:18.5,max:19.02} },
+  20: { close:{min:21.0,max:21.0}, normal:{min:22.0,max:22.0}, loose:{min:24.0,max:24.52} },
+  24: { close:{min:25.0,max:25.0}, normal:{min:26.0,max:26.0}, loose:{min:28.0,max:28.52} }
 };
 
-/* ----- ISO metric head + nut dimensions -----
-   s = across flats, k = head height, m = nut height (mm)
-   (Typical ISO 4014/4017 & ISO 4032 nominal values)
-*/
-const ISO_HEX_MET = {
-  "6":  { s:10, k:4.0,  m:5.0  },
-  "8":  { s:13, k:5.3,  m:6.5  },
-  "10": { s:16, k:6.4,  m:8.0  },
-  "12": { s:18, k:7.5,  m:10.0 },
-  "14": { s:21, k:8.8,  m:11.0 },
-  "16": { s:24, k:10.0, m:13.0 },
-  "18": { s:27, k:11.5, m:15.0 },
-  "20": { s:30, k:12.5, m:16.0 },
-  "22": { s:34, k:14.0, m:18.0 },
-  "24": { s:36, k:15.0, m:19.0 }
+const HOLES_INCH = {
+  // key is nominal bolt diameter in inches as string (matches our bolt label parsing)
+  // values: { close:{min,max}, normal:{min,max}, loose:{min,max} }
+  "0.2500": { close:{min:0.2570, max:0.2660}, normal:{min:0.2660, max:0.2720}, loose:{min:0.2810, max:0.2900} },
+  "0.3125": { close:{min:0.3230, max:0.3320}, normal:{min:0.3390, max:0.3480}, loose:{min:0.3580, max:0.3680} },
+  "0.3750": { close:{min:0.3860, max:0.3950}, normal:{min:0.4020, max:0.4110}, loose:{min:0.4210, max:0.4330} },
+  "0.4375": { close:{min:0.4500, max:0.4600}, normal:{min:0.4680, max:0.4790}, loose:{min:0.5000, max:0.5120} },
+  "0.5000": { close:{min:0.5130, max:0.5240}, normal:{min:0.5310, max:0.5430}, loose:{min:0.5620, max:0.5780} },
+  "0.5625": { close:{min:0.5780, max:0.5900}, normal:{min:0.6100, max:0.6250}, loose:{min:0.6560, max:0.6720} },
+  "0.6250": { close:{min:0.6440, max:0.6550}, normal:{min:0.6720, max:0.6880}, loose:{min:0.7030, max:0.7190} },
+  "0.7500": { close:{min:0.7690, max:0.7810}, normal:{min:0.8120, max:0.8280}, loose:{min:0.8750, max:0.8910} },
+  "0.8750": { close:{min:0.9000, max:0.9130}, normal:{min:0.9530, max:0.9690}, loose:{min:1.0000, max:1.0310} },
+  "1.0000": { close:{min:1.0250, max:1.0380}, normal:{min:1.0780, max:1.0940}, loose:{min:1.1250, max:1.1560} }
 };
 
-// Clearance hole quick rule (schematic). You can later replace with ISO 273 tables.
-function holeImpApprox(d){ return d + (d <= 0.5 ? 1/32 : 1/16); }
-function holeMetApprox(d){ return d + (d <= 12 ? 1.0 : 2.0); }
+// Returns hole diameter (nominal) from tables for the currently selected bolt
+function lookupClearanceHoleDia(state, bolt){
+  const fit = state.loads.holeFit;
+  if(fit === "custom") return null;
 
-function makeImperialBolt(label, d, tpi){
+  if(state.units === "metric"){
+    const key = Number(bolt.d); // our metric d is nominal mm integer for these entries
+    const row = HOLES_METRIC[key];
+    if(!row) return null;
+    const r = row[fit];
+    return r ? holeNom(r.min, r.max) : null;
+  } else {
+    const key = Number(bolt.d).toFixed(4);
+    const row = HOLES_INCH[key];
+    if(!row) return null;
+    const r = row[fit];
+    return r ? holeNom(r.min, r.max) : null;
+  }
+}
+
+/* ============================================================
+   Bolt generators (expanded sets)
+   - We compute At and d2 from pitch/tpi.
+   - Head/nut dims are reasonable placeholders (improve later).
+   ============================================================ */
+
+function uncAt(d, tpi){
+  // Unified tensile-stress area approximation (in^2): At = (pi/4)*(d - 0.9743/n)^2
+  const n = tpi;
+  return Math.PI/4 * Math.pow(d - 0.9743/n, 2);
+}
+function uncD2(d, tpi){
+  // pitch diameter approx for UN threads: d2 ≈ d - 0.64952*(1/n)
+  return d - 0.64952*(1/tpi);
+}
+function metricAt(d, pitch){
+  // ISO metric tensile-stress area approx (mm^2): At = (pi/4)*(d - 0.9382*p)^2
+  return Math.PI/4 * Math.pow(d - 0.9382*pitch, 2);
+}
+function metricD2(d, pitch){
+  // pitch diameter approx: d2 ≈ d - 0.64952*p
+  return d - 0.64952*pitch;
+}
+
+function inchHexAF(d){
+  // common across-flats for hex head cap screws (very typical mapping)
+  // (this is NOT the clearance hole standard; it's just for drawing realism)
+  const map = {
+    0.2500:0.4375, 0.3125:0.5000, 0.3750:0.5625, 0.4375:0.6250, 0.5000:0.7500,
+    0.5625:0.8125, 0.6250:0.9375, 0.7500:1.1250, 0.8750:1.3125, 1.0000:1.5000
+  };
+  const k = Number(d).toFixed(4);
+  return map[k] ?? (1.5*d);
+}
+function inchHeadH(d){ return 0.63*d; } // placeholder
+function inchNutH(d){ return 0.80*d; }  // placeholder
+
+function metricHexAF(d){
+  const map = {5:8,6:10,8:13,10:16,12:18,14:21,16:24,18:27,20:30,22:34,24:36};
+  return map[d] ?? Math.round(1.6*d);
+}
+function metricHeadH(d){
+  const map = {5:3.5,6:4.0,8:5.3,10:6.4,12:7.5,14:8.8,16:10.0,18:11.5,20:12.5,22:14.0,24:15.0};
+  return map[d] ?? (0.7*d);
+}
+function metricNutH(d){
+  const map = {5:4.0,6:5.0,8:6.5,10:8.0,12:10.0,14:11.0,16:13.0,18:15.0,20:16.0,22:18.0,24:19.0};
+  return map[d] ?? (0.85*d);
+}
+
+function makeInchBolt(label, d, tpi, headAF=null, headH=null, nutAF=null, nutH=null){
   const pitch = 1/tpi;
-  const At = At_UN(d, tpi);
-  const d2 = d2_basic(d, pitch);
-
-  const hd = HEX_HEAD_IMP[String(d)] || { F: 1.5*d, H: 0.7*d };
-  const headD = hd.F;   // treat as across flats for side view
-  const headH = hd.H;
-
-  const nutD  = headD;
-  const nutH  = 1.35 * 0.5*d; // decent proportional placeholder if no nut table
-
-  const hole = holeImpApprox(d);
-
-  return { label, d, tpi, pitch, At, d2, headD, headH, nutD, nutH, hole };
-}
-
-function buildUNC_UNF(){
-  // Expanded common UNC/UNF list up to 1"
-  const UNC = [
-    ["1/4-20", 0.2500, 20],
-    ["5/16-18",0.3125, 18],
-    ["3/8-16", 0.3750, 16],
-    ["7/16-14",0.4375, 14],
-    ["1/2-13", 0.5000, 13],
-    ["9/16-12",0.5625, 12],
-    ["5/8-11", 0.6250, 11],
-    ["3/4-10", 0.7500, 10],
-    ["7/8-9",  0.8750, 9],
-    ["1-8",    1.0000, 8]
-  ];
-
-  const UNF = [
-    ["1/4-28", 0.2500, 28],
-    ["5/16-24",0.3125, 24],
-    ["3/8-24", 0.3750, 24],
-    ["7/16-20",0.4375, 20],
-    ["1/2-20", 0.5000, 20],
-    ["9/16-18",0.5625, 18],
-    ["5/8-18", 0.6250, 18],
-    ["3/4-16", 0.7500, 16],
-    ["7/8-14", 0.8750, 14],
-    ["1-12",   1.0000, 12]
-  ];
-
+  const headD = headAF ?? inchHexAF(d);
+  const nutD  = nutAF  ?? inchHexAF(d);
   return {
-    coarse: UNC.map(([lab,d,tpi]) => makeImperialBolt(lab,d,tpi)),
-    fine:   UNF.map(([lab,d,tpi]) => makeImperialBolt(lab,d,tpi))
+    label, d, tpi, pitch,
+    At: uncAt(d,tpi),
+    d2: uncD2(d,tpi),
+    headD, headH: (headH ?? inchHeadH(d)),
+    nutD,  nutH:  (nutH  ?? inchNutH(d))
+  };
+}
+function makeMetricBolt(label, d, pitch, headAF=null, headH=null, nutAF=null, nutH=null){
+  const headD = headAF ?? metricHexAF(d);
+  const nutD  = nutAF  ?? metricHexAF(d);
+  return {
+    label, d, pitch,
+    At: metricAt(d,pitch),
+    d2: metricD2(d,pitch),
+    headD, headH: (headH ?? metricHeadH(d)),
+    nutD,  nutH:  (nutH  ?? metricNutH(d))
   };
 }
 
-function makeMetricBolt(label, d, pitch){
-  const At = At_ISO(d, pitch);
-  const d2 = d2_basic(d, pitch);
-
-  const dim = ISO_HEX_MET[String(d)] || { s: 1.5*d, k: 0.7*d, m: 0.8*d };
-  const headD = dim.s;
-  const headH = dim.k;
-  const nutD  = dim.s;
-  const nutH  = dim.m;
-
-  const hole = holeMetApprox(d);
-
-  return { label, d, pitch, At, d2, headD, headH, nutD, nutH, hole };
-}
-
-function buildISOmetric(){
-  // Expanded typical ISO coarse set
-  const coarse = [
-    ["M6×1.0",  6, 1.0],
-    ["M8×1.25", 8, 1.25],
-    ["M10×1.5", 10, 1.5],
-    ["M12×1.75",12, 1.75],
-    ["M14×2.0", 14, 2.0],
-    ["M16×2.0", 16, 2.0],
-    ["M18×2.5", 18, 2.5],
-    ["M20×2.5", 20, 2.5],
-    ["M22×2.5", 22, 2.5],
-    ["M24×3.0", 24, 3.0]
-  ];
-
-  // Expanded typical ISO fine set (common fine pitches)
-  const fine = [
-    ["M8×1.0",   8, 1.0],
-    ["M10×1.25", 10, 1.25],
-    ["M12×1.5",  12, 1.5],
-    ["M14×1.5",  14, 1.5],
-    ["M16×1.5",  16, 1.5],
-    ["M18×1.5",  18, 1.5],
-    ["M20×1.5",  20, 1.5],
-    ["M22×1.5",  22, 1.5],
-    ["M24×2.0",  24, 2.0]
-  ];
-
-  return {
-    coarse: coarse.map(([lab,d,p]) => makeMetricBolt(lab,d,p)),
-    fine:   fine.map(([lab,d,p]) => makeMetricBolt(lab,d,p))
-  };
-}
-
-// Bolt size tables (generated)
+// Expanded bolt lists
 const BOLTS = {
-  sae_j429: { coarse: [], fine: [] },
-  astm:     { coarse: [], fine: [] },
-  iso_metric:{ coarse: [], fine: [] }
+  sae_j429: {
+    coarse: [
+      makeInchBolt("1/4-20",  0.2500, 20),
+      makeInchBolt("5/16-18", 0.3125, 18),
+      makeInchBolt("3/8-16",  0.3750, 16),
+      makeInchBolt("7/16-14", 0.4375, 14),
+      makeInchBolt("1/2-13",  0.5000, 13),
+      makeInchBolt("9/16-12", 0.5625, 12),
+      makeInchBolt("5/8-11",  0.6250, 11),
+      makeInchBolt("3/4-10",  0.7500, 10),
+      makeInchBolt("7/8-9",   0.8750, 9),
+      makeInchBolt("1-8",     1.0000, 8)
+    ],
+    fine: [
+      makeInchBolt("1/4-28",  0.2500, 28),
+      makeInchBolt("5/16-24", 0.3125, 24),
+      makeInchBolt("3/8-24",  0.3750, 24),
+      makeInchBolt("7/16-20", 0.4375, 20),
+      makeInchBolt("1/2-20",  0.5000, 20),
+      makeInchBolt("9/16-18", 0.5625, 18),
+      makeInchBolt("5/8-18",  0.6250, 18),
+      makeInchBolt("3/4-16",  0.7500, 16),
+      makeInchBolt("7/8-14",  0.8750, 14),
+      makeInchBolt("1-12",    1.0000, 12)
+    ]
+  },
+  astm: { coarse: [], fine: [] },
+  iso_metric: {
+    coarse: [
+      makeMetricBolt("M5×0.8",   5, 0.8),
+      makeMetricBolt("M6×1.0",   6, 1.0),
+      makeMetricBolt("M8×1.25",  8, 1.25),
+      makeMetricBolt("M10×1.5",  10, 1.5),
+      makeMetricBolt("M12×1.75", 12, 1.75),
+      makeMetricBolt("M14×2.0",  14, 2.0),
+      makeMetricBolt("M16×2.0",  16, 2.0),
+      makeMetricBolt("M20×2.5",  20, 2.5),
+      makeMetricBolt("M24×3.0",  24, 3.0)
+    ],
+    fine: [
+      makeMetricBolt("M8×1.0",   8, 1.0),
+      makeMetricBolt("M10×1.25", 10, 1.25),
+      makeMetricBolt("M12×1.5",  12, 1.5),
+      makeMetricBolt("M14×1.5",  14, 1.5),
+      makeMetricBolt("M16×1.5",  16, 1.5),
+      makeMetricBolt("M20×1.5",  20, 1.5),
+      makeMetricBolt("M24×2.0",  24, 2.0)
+    ]
+  }
 };
 
-// Populate from generators
-(function buildBoltTables(){
-  const imp = buildUNC_UNF();
-  BOLTS.sae_j429.coarse = imp.coarse;
-  BOLTS.sae_j429.fine   = imp.fine;
-
-  // ASTM placeholder mirrors SAE sizes
-  BOLTS.astm.coarse = JSON.parse(JSON.stringify(BOLTS.sae_j429.coarse));
-  BOLTS.astm.fine   = JSON.parse(JSON.stringify(BOLTS.sae_j429.fine));
-
-  const met = buildISOmetric();
-  BOLTS.iso_metric.coarse = met.coarse;
-  BOLTS.iso_metric.fine   = met.fine;
-})();
+// Populate ASTM with SAE sizes as placeholder
+BOLTS.astm.coarse = JSON.parse(JSON.stringify(BOLTS.sae_j429.coarse));
+BOLTS.astm.fine   = JSON.parse(JSON.stringify(BOLTS.sae_j429.fine));
 
 /* ============================================================
    Helpers
    ============================================================ */
 const $ = id => document.getElementById(id);
 
-function fmt(x, digits=4){
-  if (x === null || x === undefined || Number.isNaN(x)) return "—";
-  const ax = Math.abs(x);
-  if (ax !== 0 && (ax >= 1e6 || ax < 1e-3)) return x.toExponential(3);
-  return Number(x).toFixed(digits).replace(/\.?0+$/,"");
-}
-
-function unitLabel(isImp){
-  return isImp ? {L:"in", F:"lbf", T:"lbf·in", E:"psi"} : {L:"mm", F:"N", T:"N·mm", E:"MPa"};
-}
-
-function materialE(matKey, isImp){
-  const m = MATERIALS.find(x => x.key === matKey);
-  if(!m) return null;
-  return isImp ? m.E_imp : m.E_met;
-}
-
-function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
-
-// Torque-per-preload factor g(mu_t, mu_b) for thread + bearing
 function gThreadBearing(bolt, Db_eff, mu_t, mu_b){
   if(!bolt || !(Db_eff>0)) return null;
 
@@ -626,8 +605,27 @@ function torqueBandForState(state, geom){
   return { feasible, reason: feasible ? "OK" : "No feasible torque band", C, Fi_req, Fi_max_allow, Fproof, Db_eff, TminReq, TmaxAllow, Tset };
 }
 
+function fmt(x, digits=4){
+  if (x === null || x === undefined || Number.isNaN(x)) return "—";
+  const ax = Math.abs(x);
+  if (ax !== 0 && (ax >= 1e6 || ax < 1e-3)) return x.toExponential(3);
+  return Number(x).toFixed(digits).replace(/\.?0+$/,"");
+}
+
+function unitLabel(isImp){
+  return isImp ? {L:"in", F:"lbf", T:"lbf·in", E:"psi"} : {L:"mm", F:"N", T:"N·mm", E:"MPa"};
+}
+
+function materialE(matKey, isImp){
+  const m = MATERIALS.find(x => x.key === matKey);
+  if(!m) return null;
+  return isImp ? m.E_imp : m.E_met;
+}
+
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
 /* ============================================================
-   UI construction: member rows + materials
+   UI construction
    ============================================================ */
 function buildMaterialsSelect(sel){
   sel.innerHTML = "";
@@ -654,7 +652,7 @@ function buildMemberRows(){
       <div class="row3">
         <div>
           <label>Thickness</label>
-          <input id="m_t_${i}" type="number" step="any" value="${i===1?0.25:0.25}">
+          <input id="m_t_${i}" type="number" step="any" value="${0.25}">
         </div>
         <div>
           <label>Material</label>
@@ -693,7 +691,7 @@ function updateMemberHelp(i){
 }
 
 /* ============================================================
-   Units-driven bolt family/grade/size dropdown logic
+   Units-driven dropdown logic
    ============================================================ */
 function rebuildBoltFamilyOptions(){
   const isImp = $("isImperial").checked;
@@ -743,7 +741,7 @@ function updateBoltEDefault(){
 }
 
 /* ============================================================
-   Read inputs into a single state object
+   Read inputs into state
    ============================================================ */
 function readState(){
   const isImp = $("isImperial").checked;
@@ -768,7 +766,6 @@ function readState(){
   return {
     units: isImp ? "imperial" : "metric",
     u,
-
     bolt: {
       family, series, gradeKey,
       sizeIdx,
@@ -803,8 +800,8 @@ function readState(){
       muBmax: Number($("muBmax").value || 0),
 
       holeFit: $("holeFit").value,
-
       holeDiaOverride: $("holeDia").value.trim()==="" ? null : Number($("holeDia").value),
+
       proofLimit: Number($("proofLimit").value || 1.0)
     }
   };
@@ -825,15 +822,17 @@ function deriveGeometry(state){
   const Db_top = state.geom.useHeadWasher ? state.geom.odHeadWasher : b.headD;
   const Db_bot = state.geom.useNutWasher  ? state.geom.odNutWasher  : b.nutD;
 
-  let dh;
+  // NEW: table-based clearance hole lookup for Close/Normal/Loose; Custom overrides
+  let dh = null;
   if (state.loads.holeFit === "custom") {
-    dh = (state.loads.holeDiaOverride !== null) ? state.loads.holeDiaOverride : (b.holeNormal ?? b.hole);
-  } else if (state.loads.holeFit === "close") {
-    dh = b.holeClose ?? b.holeNormal ?? b.hole;
-  } else if (state.loads.holeFit === "loose") {
-    dh = b.holeLoose ?? b.holeNormal ?? b.hole;
+    dh = (state.loads.holeDiaOverride !== null) ? state.loads.holeDiaOverride : null;
   } else {
-    dh = b.holeNormal ?? b.hole;
+    dh = lookupClearanceHoleDia(state, b);
+  }
+
+  // Fallback: if table has no row (e.g., a rare size), use a conservative default = normal ~= d + 0.06d (very rough)
+  if(!(dh>0)){
+    dh = state.units === "metric" ? (b.d + 1.0) : (b.d + 0.0625);
   }
 
   const Lsh = clamp(state.geom.Lshank, 0, Lg);
@@ -860,7 +859,6 @@ function calcBoltStiffness(state, geom){
   return { kb, A_shank, At, eta, At_eff };
 }
 
-// ---- Shigley 30° frustum member stiffness (layered, two-sided) ----
 function calcMemberStiffnessShigley(state, geom){
   const isImp = state.units === "imperial";
   const alpha = (state.geom.frustumAngleDeg || 30) * Math.PI/180;
@@ -990,7 +988,6 @@ function frustumCompliance(E, dh, D0, D1, tanA){
   return (1/(E*Math.PI*dh*tanA)) * term;
 }
 
-// Real torque -> preload mapping (thread + bearing)
 function calcPreloadBoundsThreadBearing(state, geom){
   const b = state.bolt.data;
   if(!b) return null;
@@ -1046,7 +1043,7 @@ function calcProofLoad(state){
 }
 
 /* ============================================================
-   Solver + output tables
+   Solver + output
    ============================================================ */
 function runSolveForCurrentSelection(){
   const state = readState();
@@ -1069,6 +1066,9 @@ function runSolveForCurrentSelection(){
     ["Grip length Lg", `${fmt(ev.geom.Lg)} ${u.L}`],
     ["Shank in grip Lsh", `${fmt(ev.geom.Lsh)} ${u.L}`],
     ["Thread in grip Lth", `${fmt(ev.geom.Lth)} ${u.L}`],
+
+    ["Clearance hole dia dh", `${fmt(ev.geom.dh)} ${u.L}`],
+    ["Hole fit", state.loads.holeFit],
 
     ["Torque applied at", state.loads.torqueAt === "head" ? "Head" : "Nut"],
     ["Effective bearing dia Db_eff", `${fmt(ev.preload?.Db_eff)} ${u.L}`],
@@ -1133,7 +1133,7 @@ function updateRightPills(){
 }
 
 /* ============================================================
-   Drawing (scaled)
+   Drawing
    ============================================================ */
 function clipPlateMinusHole(ctx, x, y, w, h, holeX, holeW){
   ctx.beginPath();
@@ -1154,8 +1154,8 @@ function drawJoint(state, geom){
   const b = state.bolt.data;
   if(!b || !geom) return;
 
-  // protrusion beyond nut (Shigley-style). Uses length-units (in or mm).
-  const protrudeL = Math.max(0.25 * b.d, 2 * b.pitch);
+  // Small protrusion beyond nut for realism (Shigley-style)
+  const protrudeL = Math.max(0.25 * b.d, 2 * b.pitch); // in or mm
 
   const headH = b.headH, nutH = b.nutH;
   const stackH = geom.Lg;
@@ -1190,13 +1190,12 @@ function drawJoint(state, geom){
   const threadW = Dpx(b.d2);
 
   const yThreadStart = yStackTop + Lpx(geom.Lsh);
-  const yThreadEnd   = yBoltEnd; // show threads through nut + protrusion
+  const yThreadEnd   = yBoltEnd; // show threads through nut & protrusion
 
-  // Layers: washers limited to OD (Option A), members full width
   const layers = [];
-  if (state.geom.useHeadWasher && geom.tHW > 0) layers.push({ t: state.geom.tHeadWasher, kind:"washer", od: geom.Db_top });
-  state.geom.members.forEach((m,i)=> layers.push({ t:m.t, kind:"member", hatchDir:(i%2===0?1:-1) }));
-  if (state.geom.useNutWasher && geom.tNW > 0)  layers.push({ t: state.geom.tNutWasher, kind:"washer", od: geom.Db_bot });
+  if (state.geom.useHeadWasher && geom.tHW > 0) layers.push({ t: state.geom.tHeadWasher, kind: "washer", od: geom.Db_top });
+  state.geom.members.forEach((m,i)=> layers.push({ t: m.t, kind: "member", hatchDir: (i%2===0?1:-1) }));
+  if (state.geom.useNutWasher && geom.tNW > 0) layers.push({ t: state.geom.tNutWasher, kind: "washer", od: geom.Db_bot });
 
   let y = yStackTop;
   for(const L of layers){
@@ -1208,7 +1207,9 @@ function drawJoint(state, geom){
     ctx.strokeStyle = "#4b5563";
     ctx.lineWidth = 1;
 
+    // Option A: washers only to OD width; members full width
     const halfW = (L.kind === "washer" && L.od) ? (Dpx(L.od) / 2) : plateHalfW;
+
     const x0 = cx - halfW;
     const w0 = 2*halfW;
     const holeX = cx - holeW/2;
@@ -1229,7 +1230,7 @@ function drawJoint(state, geom){
     y += h;
   }
 
-  // bolt shank (full length through protrusion)
+  // bolt shank
   ctx.save();
   ctx.fillStyle = "#d6a3a8";
   ctx.strokeStyle = "#7c2d32";
@@ -1254,13 +1255,14 @@ function drawJoint(state, geom){
   }
   ctx.restore();
 
-  // thread-start marker + dimensions (inside drawJoint)
+  // thread start marker + Lsh/Lth brackets
   drawThreadStartMarker(ctx, cx, yThreadStart, shankW);
+
   const xDim = cx + plateHalfW*0.82;
   drawDimBracket(ctx, xDim, yStackTop,    yThreadStart, `Lsh = ${fmt(geom.Lsh)} ${state.u.L}`);
   drawDimBracket(ctx, xDim, yThreadStart, yStackBot,    `Lth = ${fmt(geom.Lth)} ${state.u.L}`);
 
-  // head + nut (professional flat-sided blocks)
+  // head + nut (professional-ish flats)
   ctx.save();
   ctx.fillStyle = "#c78f95";
   ctx.strokeStyle = "#7c2d32";
@@ -1301,7 +1303,7 @@ function drawJoint(state, geom){
   ctx.restore();
 }
 
-// --- Drawing helpers ---
+// helpers
 function hatchRect(ctx, x, y, w, h, dir=1, step=10, color="#9ca3af"){
   ctx.save();
   ctx.strokeStyle = color;
@@ -1325,7 +1327,6 @@ function hatchRect(ctx, x, y, w, h, dir=1, step=10, color="#9ca3af"){
   ctx.restore();
 }
 
-// flat-sided head/nut with chamfers
 function drawHexFlatBlock(ctx, cx, yTop, w, h){
   const x = cx - w/2;
   const y = yTop;
@@ -1490,7 +1491,6 @@ function resetDefaults(){
   $("holeDia").value = "";
 
   $("proofLimit").value = "1.00";
-
   $("frustumAngle").value = "30";
   $("torqueAt").value = "nut";
   $("etaThread").value = "0.90";
@@ -1665,6 +1665,7 @@ function runSizeScan(){
 </script>
 </body>
 </html>
+
 
 
 
