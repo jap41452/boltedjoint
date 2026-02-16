@@ -1200,6 +1200,7 @@ function clipPlateMinusHole(ctx, x, y, w, h, holeX, holeW){
   ctx.clip("evenodd");
 }
 
+
 function drawJoint(state, geom){
   const c = $("jointCanvas");
   const ctx = c.getContext("2d");
@@ -1213,27 +1214,22 @@ function drawJoint(state, geom){
   if(!b || !geom) return;
 
   // Small protrusion beyond nut for realism (Shigley-style)
-  const protrudeL = Math.max(0.25 * b.d, 2 * b.pitch); // in or mm
+  const protrudeL = Math.max(0.25 * b.d, 2 * b.pitch);
 
   const headH = b.headH, nutH = b.nutH;
   const stackH = geom.Lg;
   const totalH = headH + stackH + nutH + protrudeL;
 
-  const topY = pad;
-  const botY = H - pad;
-  const availH = botY - topY;
+  // Use a SINGLE scale factor based on the total height to fit vertically
+  const availH = H - 2*pad;
+  const s = totalH > 0 ? (availH / totalH) : 1;
 
-  const maxD = Math.max(b.headD, b.nutD, geom.Db_top, geom.Db_bot, b.d);
-  const availX = W - 2*pad;
-
-  const sY = totalH > 0 ? (availH / totalH) : 1;
-  const sX = maxD > 0 ? (0.58*availX / maxD) : 1;
-  const s  = Math.min(sX, sY);
-
+  // Helper functions - everything uses the SAME scale
   const Dpx = D => D*s;
   const Lpx = L => L*s;
 
-  const yHeadTop  = topY;
+  // Calculate positions
+  const yHeadTop  = pad;
   const yHeadBot  = yHeadTop + Lpx(headH);
   const yStackTop = yHeadBot;
   const yStackBot = yStackTop + Lpx(stackH);
@@ -1241,9 +1237,11 @@ function drawJoint(state, geom){
   const yNutBot   = yNutTop + Lpx(nutH);
   const yBoltEnd  = yNutBot + Lpx(protrudeL);
 
-  const plateHalfW = Math.max(Dpx(maxD)*1.15, (W-2*pad)*0.38);
-  const holeW = Dpx(geom.dh);
+  // Plate width: use a reasonable multiple of the largest diameter feature
+  const maxD = Math.max(b.headD, b.nutD, geom.Db_top, geom.Db_bot);
+  const plateHalfW = Dpx(maxD) * 2.0;  // Plates extend 2x the largest diameter
 
+  const holeW = Dpx(geom.dh);
   const shankW  = Dpx(b.d);
   const threadW = Dpx(b.d2);
 
@@ -1265,7 +1263,7 @@ function drawJoint(state, geom){
     ctx.strokeStyle = "#4b5563";
     ctx.lineWidth = 1;
 
-    // Option A: washers only to OD width; members full width
+    // Washers only to OD width; members full width
     const halfW = (L.kind === "washer" && L.od) ? (Dpx(L.od) / 2) : plateHalfW;
 
     const x0 = cx - halfW;
@@ -1358,30 +1356,6 @@ function drawJoint(state, geom){
   ctx.fillText("P", xA2 - 10, yStackTop - 62);
   ctx.fillText("P", xA1 - 10, yStackBot + 72);
   ctx.fillText("P", xA2 - 10, yStackBot + 72);
-  ctx.restore();
-}
-
-// helpers
-function hatchRect(ctx, x, y, w, h, dir=1, step=10, color="#9ca3af"){
-  ctx.save();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.rect(x,y,w,h);
-  ctx.clip();
-
-  const diag = Math.sqrt(w*w + h*h);
-  const ang = (dir>=0) ? Math.PI/4 : -Math.PI/4;
-
-  ctx.translate(x + w/2, y + h/2);
-  ctx.rotate(ang);
-
-  for(let t=-diag; t<=diag; t+=step){
-    ctx.beginPath();
-    ctx.moveTo(t, -diag);
-    ctx.lineTo(t,  diag);
-    ctx.stroke();
-  }
   ctx.restore();
 }
 
@@ -1967,6 +1941,7 @@ function runSizeScan(){
 </script>
 </body>
 </html>
+
 
 
 
