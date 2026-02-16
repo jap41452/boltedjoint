@@ -119,7 +119,7 @@
       </div>
 
       <div class="note">
-        Washer bearing diameter rule: <b>if washer used → OD</b>. If no washer → bolt head / nut bearing diameter (from table placeholders).
+        Washer bearing diameter rule: <b>if washer used → OD</b>. If no washer → bolt head / nut bearing diameter from table.
       </div>
     </div>
 
@@ -272,6 +272,15 @@
         <button id="btnReset">Reset Defaults</button>
       </div>
 
+<div class="btnbar" style="margin-top:10px;">
+  <button id="btnExportJSON">Export JSON</button>
+  <button id="btnImportJSON">Import JSON</button>
+  <button id="btnExportCSV">Export CSV</button>
+</div>
+
+
+
+
       <div class="small muted" style="margin-top:6px;">
         Clearance hole is now taken from Close/Normal/Loose tables (metric & inch). Custom overrides the table.
       </div>
@@ -325,7 +334,7 @@ const MATERIALS = [
 const BOLT_FAMILIES = {
   imperial: [
     { key:"sae_j429", name:"SAE J429" },
-    { key:"astm",     name:"ASTM (placeholder)" }
+    { key:"astm",     name:"ASTM" }
   ],
   metric: [
     { key:"iso_metric", name:"ISO Metric" }
@@ -534,7 +543,7 @@ const BOLTS = {
   }
 };
 
-// Populate ASTM with SAE sizes as placeholder
+// Populate ASTM with SAE sizes 
 BOLTS.astm.coarse = JSON.parse(JSON.stringify(BOLTS.sae_j429.coarse));
 BOLTS.astm.fine   = JSON.parse(JSON.stringify(BOLTS.sae_j429.fine));
 
@@ -680,6 +689,56 @@ function buildMemberRows(){
     updateMemberHelp(i);
   }
 }
+
+function buildMemberRowsWithData(membersData){
+  const n = Number($("numMembers").value);
+  const wrap = $("membersArea");
+  wrap.innerHTML = "";
+
+  for(let i=1;i<=n;i++){
+    const memberData = membersData && membersData[i-1] ? membersData[i-1] : null;
+    const tVal = memberData ? memberData.t : "0.25";
+    const matVal = memberData ? memberData.mat : "steel";
+    const extraVal = memberData ? memberData.extra : "";
+    
+    const card = document.createElement("div");
+    card.className = "card";
+    card.style.margin = "10px 0 0";
+    card.style.borderRadius = "12px";
+    card.innerHTML = `
+      <h2 style="margin-bottom:8px;">Clamped Member ${i}</h2>
+      <div class="row3">
+        <div>
+          <label>Thickness</label>
+          <input id="m_t_${i}" type="number" step="any" value="${tVal}">
+        </div>
+        <div>
+          <label>Material</label>
+          <select id="m_mat_${i}"></select>
+        </div>
+        <div>
+          <label>Special (k or E)</label>
+          <input id="m_extra_${i}" type="number" step="any" placeholder="auto" value="${extraVal}" />
+        </div>
+      </div>
+      <div class="small muted" id="m_help_${i}">For Gasket/O-ring enter k; for General enter E. Otherwise leave blank.</div>
+    `;
+    wrap.appendChild(card);
+
+    const sel = $("m_mat_"+i);
+    buildMaterialsSelect(sel);
+    sel.value = matVal;
+
+    sel.addEventListener("change", ()=>{
+      updateMemberHelp(i);
+      recalcAndDraw(false);
+    });
+    $("m_t_"+i).addEventListener("input", ()=>recalcAndDraw(false));
+    $("m_extra_"+i).addEventListener("input", ()=>recalcAndDraw(false));
+    updateMemberHelp(i);
+  }
+}
+
 
 function updateMemberHelp(i){
   const key = $("m_mat_"+i).value;
@@ -1500,6 +1559,242 @@ function resetDefaults(){
   recalcAndDraw(false);
 }
 
+/* ============================================================
+   Export/Import Functions
+   ============================================================ */
+
+function exportStateAsJSON() {
+  const state = readState();
+  
+  // Capture all input values for restoration
+  const exportData = {
+    version: "1.0",
+    timestamp: new Date().toISOString(),
+    units: {
+      isImperial: $("isImperial").checked
+    },
+    bolt: {
+      family: $("boltFamily").value,
+      threadSeries: $("threadSeries").value,
+      grade: $("boltGrade").value,
+      size: $("boltSize").value,
+      boltE: $("boltE").value,
+      etaThread: $("etaThread").value,
+      frustumAngle: $("frustumAngle").value
+    },
+    geometry: {
+      useHeadWasher: $("useHeadWasher").value,
+      tHeadWasher: $("tHeadWasher").value,
+      odHeadWasher: $("odHeadWasher").value,
+      matHeadWasher: $("matHeadWasher").value,
+      
+      numMembers: $("numMembers").value,
+      members: [],
+      
+      useNutWasher: $("useNutWasher").value,
+      tNutWasher: $("tNutWasher").value,
+      odNutWasher: $("odNutWasher").value,
+      matNutWasher: $("matNutWasher").value,
+      
+      Lshank: $("Lshank").value
+    },
+    loads: {
+      P: $("Pext").value,
+      T: $("Ttarget").value,
+      torqueAt: $("torqueAt").value,
+      Ttol: $("Ttol").value,
+      muTmin: $("muTmin").value,
+      muTmax: $("muTmax").value,
+      muBmin: $("muBmin").value,
+      muBmax: $("muBmax").value,
+      holeFit: $("holeFit").value,
+      holeDia: $("holeDia").value,
+      proofLimit: $("proofLimit").value
+    }
+  };
+  
+  // Capture member data
+  const nMembers = Number($("numMembers").value);
+  for(let i = 1; i <= nMembers; i++) {
+    exportData.geometry.members.push({
+      t: $("m_t_" + i).value,
+      mat: $("m_mat_" + i).value,
+      extra: $("m_extra_" + i).value
+    });
+  }
+  
+  // Create and download JSON file
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `bolted-joint-${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  
+  setStatus("JSON exported", "ok");
+}
+
+function importStateFromJSON() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target.result);
+        
+        // Restore units
+        $("isImperial").checked = data.units.isImperial;
+        
+        // Trigger rebuild of family/grade/size dropdowns
+        rebuildBoltFamilyOptions();
+        
+        // Restore bolt settings
+        $("boltFamily").value = data.bolt.family;
+        rebuildGradeOptions();
+        
+        $("threadSeries").value = data.bolt.threadSeries;
+        rebuildSizeOptions();
+        
+        $("boltGrade").value = data.bolt.grade;
+        $("boltSize").value = data.bolt.size;
+        $("boltE").value = data.bolt.boltE;
+        $("etaThread").value = data.bolt.etaThread;
+        $("frustumAngle").value = data.bolt.frustumAngle;
+        
+        // Restore geometry
+        $("useHeadWasher").value = data.geometry.useHeadWasher;
+        $("tHeadWasher").value = data.geometry.tHeadWasher;
+        $("odHeadWasher").value = data.geometry.odHeadWasher;
+        $("matHeadWasher").value = data.geometry.matHeadWasher;
+        
+        $("useNutWasher").value = data.geometry.useNutWasher;
+        $("tNutWasher").value = data.geometry.tNutWasher;
+        $("odNutWasher").value = data.geometry.odNutWasher;
+        $("matNutWasher").value = data.geometry.matNutWasher;
+        $("Lshank").value = data.geometry.Lshank;
+        
+        // Restore loads
+        $("Pext").value = data.loads.P;
+        $("Ttarget").value = data.loads.T;
+        $("torqueAt").value = data.loads.torqueAt;
+        $("Ttol").value = data.loads.Ttol;
+        $("muTmin").value = data.loads.muTmin;
+        $("muTmax").value = data.loads.muTmax;
+        $("muBmin").value = data.loads.muBmin;
+        $("muBmax").value = data.loads.muBmax;
+        $("holeFit").value = data.loads.holeFit;
+        $("holeDia").value = data.loads.holeDia;
+        $("proofLimit").value = data.loads.proofLimit;
+        
+        // Handle members - need to build rows with correct data
+        $("numMembers").value = data.geometry.numMembers;
+        buildMemberRowsWithData(data.geometry.members);
+        
+        recalcAndDraw(true);
+        setStatus("JSON imported", "ok");
+        
+      } catch (err) {
+        setStatus("Import failed: " + err.message, "err");
+        console.error("Import error:", err);
+      }
+    };
+    reader.readAsText(file);
+  };
+  
+  input.click();
+}
+
+function exportSummaryAsCSV() {
+  const state = readState();
+  const ev = evaluateCurrentBolt(state);
+  
+  if (!ev.geom) {
+    setStatus("No data to export", "err");
+    return;
+  }
+  
+  const u = state.u;
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 19).replace('T', ' ');
+  
+  // Build CSV content
+  let csv = "Bolted Joint Analysis Summary\n";
+  csv += `Export Date/Time,${dateStr}\n`;
+  csv += `\n`;
+  
+  // Configuration section
+  csv += "CONFIGURATION\n";
+  csv += `Units,${state.units === "imperial" ? "Imperial" : "Metric"}\n`;
+  csv += `Bolt Family,${$("boltFamily").value}\n`;
+  csv += `Thread Series,${$("threadSeries").value}\n`;
+  csv += `Grade,${$("boltGrade").value}\n`;
+  csv += `Bolt Size,${state.bolt.data?.label || "—"}\n`;
+  csv += `\n`;
+  
+  // Input parameters
+  csv += "INPUT PARAMETERS\n";
+  csv += `External Load P,${state.loads.P},${u.F}\n`;
+  csv += `Target Torque T,${state.loads.T},${u.T}\n`;
+  csv += `Torque Tolerance,${(state.loads.TtolPct * 100).toFixed(1)},%\n`;
+  csv += `Grip Length Lg,${fmt(ev.geom.Lg)},${u.L}\n`;
+  csv += `Shank Length in Grip,${fmt(ev.geom.Lsh)},${u.L}\n`;
+  csv += `Thread Length in Grip,${fmt(ev.geom.Lth)},${u.L}\n`;
+  csv += `\n`;
+  
+  // Results section
+  csv += "ANALYSIS RESULTS\n";
+  csv += `Quantity,Value,Units\n`;
+  csv += `Clearance Hole Diameter,${fmt(ev.geom.dh)},${u.L}\n`;
+  csv += `Hole Fit,${state.loads.holeFit}\n`;
+  csv += `Torque Applied At,${state.loads.torqueAt}\n`;
+  csv += `Effective Bearing Diameter,${fmt(ev.preload?.Db_eff)},${u.L}\n`;
+  csv += `Shank Area,${fmt(ev.kbOut?.A_shank)},${u.L}²\n`;
+  csv += `Tensile Stress Area,${fmt(ev.kbOut?.At)},${u.L}²\n`;
+  csv += `Thread Compliance Factor,${fmt(ev.kbOut?.eta, 3)}\n`;
+  csv += `Effective Thread Area,${fmt(ev.kbOut?.At_eff)},${u.L}²\n`;
+  csv += `Bolt Stiffness kb,${fmt(ev.kbOut?.kb)},${u.F}/${u.L}\n`;
+  csv += `Member Stiffness km,${fmt(ev.kmOut?.km)},${u.F}/${u.L}\n`;
+  csv += `Load Fraction C,${fmt(ev.C, 5)}\n`;
+  csv += `Torque Min,${fmt(ev.preload?.Tmin)},${u.T}\n`;
+  csv += `Torque Max,${fmt(ev.preload?.Tmax)},${u.T}\n`;
+  csv += `Preload Min,${fmt(ev.preload?.Fmin)},${u.F}\n`;
+  csv += `Preload Max,${fmt(ev.preload?.Fmax)},${u.F}\n`;
+  csv += `Separation Requirement,${fmt(ev.sepReq)},${u.F}\n`;
+  csv += `Separation Margin,${fmt(ev.sepMargin)},${u.F}\n`;
+  csv += `Proof Load,${fmt(ev.Fproof)},${u.F}\n`;
+  csv += `Max Bolt Load,${fmt(ev.FbMax)},${u.F}\n`;
+  csv += `Proof Margin,${fmt(ev.proofMargin)},${u.F}\n`;
+  csv += `\n`;
+  
+  // Status
+  let status = "OK";
+  if (ev.sepMargin != null && ev.sepMargin < 0) status = "FAIL - Separation";
+  else if (ev.proofMargin != null && ev.proofMargin < 0) status = "FAIL - Over Proof";
+  else if (ev.sepMargin != null && ev.sepMargin < 0.05 * Math.max(1, ev.sepReq || 1)) status = "WARNING - Low Separation Margin";
+  
+  csv += `Overall Status,${status}\n`;
+  
+  // Create and download CSV file
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `bolted-joint-summary-${now.toISOString().slice(0, 19).replace(/:/g, '-')}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  
+  setStatus("CSV exported", "ok");
+}
+
+
+
 function bindEvents(){
   $("isImperial").addEventListener("change", ()=>{
     rebuildBoltFamilyOptions();
@@ -1568,6 +1863,14 @@ function bindEvents(){
   $("btnReset").addEventListener("click", resetDefaults);
 
   $("btnScan").addEventListener("click", runSizeScan);
+
+
+$("btnExportJSON").addEventListener("click", exportStateAsJSON);
+  $("btnImportJSON").addEventListener("click", importStateFromJSON);
+  $("btnExportCSV").addEventListener("click", exportSummaryAsCSV);
+
+
+
 }
 
 /* ============================================================
