@@ -56,7 +56,7 @@
   .status-warn{color:var(--warn); border-color:#f1d6a8; background:#fffbf2;}
   .status-err{color:var(--err); border-color:#f0b4b4; background:#fff5f5;}
   #canvasWrap{ background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px; }
-  canvas{width:100%; height:320px; display:block;}
+  canvas{width:100%; height:420px; display:block;}
   .muted{color:var(--muted);}
   .rightGrid{display:grid; grid-template-columns: 1fr; gap:12px;}
   .note{font-size:12px; color:var(--muted); line-height:1.35;}
@@ -299,7 +299,7 @@
           </div>
           <span class="pill" id="statusPill">Ready</span>
         </div>
-        <canvas id="jointCanvas" width="1200" height="420"></canvas>
+        <canvas id="jointCanvas" width="900" height="420"></canvas>
         <div class="note" style="margin-top:8px;">
           Drawing is to scale based on your inputs (stack thicknesses & bearing diameters). Threads are shown extending into the members and through the nut (Shigley-style schematic).
         </div>
@@ -1968,6 +1968,7 @@ function runSizeScan(){
 </script>
 </body>
 </html>
+
 
 
 
