@@ -234,16 +234,15 @@
           <label>μ_bearing (min)</label>
           <input id="muBmin" type="number" step="any" value="0.12" />
         </div>
-        <div></div><div></div>
-      </div>
-
-      <div class="row3">
         <div>
           <label>μ_bearing (max)</label>
           <input id="muBmax" type="number" step="any" value="0.20" />
         </div>
+
+
         <div></div><div></div>
       </div>
+
 
       <div class="row3">
         <div>
@@ -1242,7 +1241,7 @@ function drawJoint(state, geom){
   const yNutBot   = yNutTop + Lpx(nutH);
   const yBoltEnd  = yNutBot + Lpx(protrudeL);
 
-  const plateHalfW = Math.max(Dpx(maxD)*1.5, (W-2*pad)*0.45);  // Wider plates
+  const plateHalfW = Math.max(Dpx(maxD)*1.15, (W-2*pad)*0.38);
   const holeW = Dpx(geom.dh);
 
   const shankW  = Dpx(b.d);
@@ -1968,6 +1967,7 @@ function runSizeScan(){
 </script>
 </body>
 </html>
+
 
 
 
