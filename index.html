@@ -1200,6 +1200,31 @@ function clipPlateMinusHole(ctx, x, y, w, h, holeX, holeW){
   ctx.clip("evenodd");
 }
 
+// helpers
+function hatchRect(ctx, x, y, w, h, dir=1, step=10, color="#9ca3af"){
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.rect(x,y,w,h);
+  ctx.clip();
+
+  const diag = Math.sqrt(w*w + h*h);
+  const ang = (dir>=0) ? Math.PI/4 : -Math.PI/4;
+
+  ctx.translate(x + w/2, y + h/2);
+  ctx.rotate(ang);
+
+  for(let t=-diag; t<=diag; t+=step){
+    ctx.beginPath();
+    ctx.moveTo(t, -diag);
+    ctx.lineTo(t,  diag);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+
 
 function drawJoint(state, geom){
   const c = $("jointCanvas");
@@ -1237,9 +1262,12 @@ function drawJoint(state, geom){
   const yNutBot   = yNutTop + Lpx(nutH);
   const yBoltEnd  = yNutBot + Lpx(protrudeL);
 
-  // Plate width: use a reasonable multiple of the largest diameter feature
-  const maxD = Math.max(b.headD, b.nutD, geom.Db_top, geom.Db_bot);
-  const plateHalfW = Dpx(maxD) * 2.0;  // Plates extend 2x the largest diameter
+
+// Plate width: use a reasonable multiple of the largest diameter feature, but check canvas width
+const maxD = Math.max(b.headD, b.nutD, geom.Db_top, geom.Db_bot);
+const idealPlateHalfW = Dpx(maxD) * 2.0;  // Plates extend 2x the largest diameter
+const maxPlateHalfW = (W - 2*pad) * 0.45; // Don't exceed 45% of canvas width
+const plateHalfW = Math.min(idealPlateHalfW, maxPlateHalfW);
 
   const holeW = Dpx(geom.dh);
   const shankW  = Dpx(b.d);
@@ -1941,6 +1969,7 @@ function runSizeScan(){
 </script>
 </body>
 </html>
+
 
 
 
